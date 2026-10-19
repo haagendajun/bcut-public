@@ -1,0 +1,86 @@
+{
+ "rmin": {
+  "B_total": 47,
+  "B_candidate": 24,
+  "B_cand_or_review": 40,
+  "FP_candidate": 2,
+  "FP_candidate_in_OK_EXPR": 2,
+  "review_negatives": 4,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 21,
+  "bursts_cand_or_review": 25
+ },
+ "rmean": {
+  "B_total": 47,
+  "B_candidate": 30,
+  "B_cand_or_review": 40,
+  "FP_candidate": 2,
+  "FP_candidate_in_OK_EXPR": 2,
+  "review_negatives": 4,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 23,
+  "bursts_cand_or_review": 24
+ },
+ "rmax": {
+  "B_total": 47,
+  "B_candidate": 31,
+  "B_cand_or_review": 41,
+  "FP_candidate": 1,
+  "FP_candidate_in_OK_EXPR": 1,
+  "review_negatives": 7,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 23,
+  "bursts_cand_or_review": 24
+ },
+ "rmin_any": {
+  "B_total": 47,
+  "B_candidate": 24,
+  "B_cand_or_review": 40,
+  "FP_candidate": 2,
+  "FP_candidate_in_OK_EXPR": 2,
+  "review_negatives": 4,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 21,
+  "bursts_cand_or_review": 25
+ },
+ "rmax_any": {
+  "B_total": 47,
+  "B_candidate": 31,
+  "B_cand_or_review": 41,
+  "FP_candidate": 1,
+  "FP_candidate_in_OK_EXPR": 1,
+  "review_negatives": 7,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 23,
+  "bursts_cand_or_review": 24
+ },
+ "rmin_rel": {
+  "B_total": 47,
+  "B_candidate": 21,
+  "B_cand_or_review": 35,
+  "FP_candidate": 2,
+  "FP_candidate_in_OK_EXPR": 2,
+  "review_negatives": 211,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 19,
+  "bursts_cand_or_review": 25
+ },
+ "rmax_rel": {
+  "B_total": 47,
+  "B_candidate": 22,
+  "B_cand_or_review": 36,
+  "FP_candidate": 2,
+  "FP_candidate_in_OK_EXPR": 2,
+  "review_negatives": 226,
+  "neg_total": 350,
+  "bursts": 25,
+  "bursts_candidate": 20,
+  "bursts_cand_or_review": 25
+ }
+}

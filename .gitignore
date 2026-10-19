@@ -1,0 +1,42 @@
+# 사진과 Capture One 데이터는 저장소에 넣지 않는다 (제약 C1)
+*.CR3
+*.cr3
+*.CR2
+*.NEF
+*.ARW
+*.DNG
+*.RAF
+*.ORF
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
+*.heic
+*.cocatalog/
+*.cocatalogdb
+*.cosessiondb
+*.cos
+*.cof
+*.cop
+*.cot
+CaptureOne/
+
+# 파이썬
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# 시스템
+.DS_Store
+
+# 도구가 행사 폴더에 만드는 산출물 (행사 데이터이므로 저장소에 넣지 않는다)
+bcut-report.csv
+bcut-report.html
+bcut-backup.json
+bcut-log.json
+
+bcut-out/

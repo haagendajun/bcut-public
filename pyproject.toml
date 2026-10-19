@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bcut"
+version = "0.1.0"
+description = "포토팀 셀렉용 B컷 후보 사전 필터 (로컬 전용)"
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=2",
+  "Pillow>=11",
+  "rawpy>=0.25",
+  "pyobjc-framework-Vision>=12",
+  "pyobjc-framework-Quartz>=12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+bcut = "bcut.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# 개발 모드 설치 파일(.pth)에 macOS 숨김 표시가 붙으면 Python 3.13이 무시한다. 그래도 테스트가 돌게 한다.
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# 한 번 돌리고 결과를 문서로 남기는 스파이크 스크립트는 줄 길이를 느슨하게 둔다
+"tools/spike_*.py" = ["E501"]
+# 실험·측정 스크립트도 같다. src/와 tests/는 줄 길이 규칙을 그대로 지킨다
+"eval/*.py" = ["E501"]
+"tools/extract_*.py" = ["E501"]
+# HTML 리포트 템플릿 안의 자바스크립트는 줄이 길다
+"src/bcut/report/html_report.py" = ["E501"]
+# 화면 코드(JS) 검증 테스트도 JS 문자열 때문에 줄이 길다
+"tests/test_report_js.py" = ["E501"]
