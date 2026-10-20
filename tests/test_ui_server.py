@@ -164,6 +164,81 @@ def test_access_log_is_silent(world, capsys):
 
 # ---- 분석 작업 ----------------------------------------------------------------------------
 
+def start_job(server, ev):
+    job = jbody(call(server, "POST", "/api/scan", {"folder": str(ev)})[2])["job"]
+    wait_done(server, job)
+    return job
+
+
+# ---- 표시: 셀렉·보류·버릴 컷 (훑기 모드) ----------------------------------------------------
+
+def test_results_include_the_file_size(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    rows = {r["file"]: r for r in jbody(call(server, "GET", f"/api/jobs/{job}/results")[2])["rows"]}
+    assert rows["A.CR3"]["size"] == (ev / "A.CR3").stat().st_size == 250
+
+
+def test_marks_start_empty_and_need_the_token(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    assert jbody(call(server, "GET", f"/api/jobs/{job}/marks")[2]) == {"marks": [], "broken": 0}
+    assert call(server, "GET", f"/api/jobs/{job}/marks", token=False)[0] == 401
+    assert call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"},
+                token=False)[0] == 401
+
+
+def test_set_replace_and_clear_a_mark(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+
+    def post(file, kind):
+        return call(server, "POST", f"/api/jobs/{job}/marks", {"file": file, "kind": kind})
+
+    def current():
+        return {m["file"]: m["kind"] for m in jbody(call(server, "GET", f"/api/jobs/{job}/marks")[2])["marks"]}
+
+    status, _, raw = post("A.CR3", "pick")
+    assert status == 200 and jbody(raw) == {"file": "A.CR3", "size": 250, "kind": "pick"}
+    post("B.CR3", "maybe")
+    assert current() == {"A.CR3": "pick", "B.CR3": "maybe"}
+    post("A.CR3", "discard")  # 새 표시가 앞 표시를 바꾼다 (한 장에 하나)
+    assert current() == {"A.CR3": "discard", "B.CR3": "maybe"}
+    assert jbody(post("A.CR3", None)[2])["kind"] is None  # 해제
+    assert current() == {"B.CR3": "maybe"}
+
+
+def test_marks_stay_when_the_same_event_is_scanned_again(world):
+    server, ev, *_ = world
+    first = start_job(server, ev)
+    call(server, "POST", f"/api/jobs/{first}/marks", {"file": "C.CR3", "kind": "pick"})
+    second = start_job(server, ev)  # 다시 검사하면 작업 번호가 바뀐다
+    assert second != first
+    marks = jbody(call(server, "GET", f"/api/jobs/{second}/marks")[2])["marks"]
+    assert marks == [{"file": "C.CR3", "size": 250, "kind": "pick"}]
+
+
+def test_marks_reject_bad_input(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/marks"
+    assert call(server, "POST", url, {"file": "../A.CR3", "kind": "pick"})[0] == 404  # 경로 조작
+    assert call(server, "POST", url, {"file": "없는.CR3", "kind": "pick"})[0] == 404
+    assert call(server, "POST", url, {"file": "A.CR3", "kind": "like"})[0] == 400
+    assert call(server, "POST", url, {"kind": "pick"})[0] == 404
+    assert call(server, "POST", url, b"not json")[0] == 400
+    assert call(server, "PUT", url, {"file": "A.CR3", "kind": "pick"})[0] == 405
+    assert jbody(call(server, "GET", url)[2])["marks"] == []
+
+
+def test_marks_are_not_written_into_the_event_folder(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    before = sorted(p.name for p in ev.iterdir())
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"})
+    assert sorted(p.name for p in ev.iterdir()) == before  # 원본 폴더에는 아무것도 쓰지 않는다
+    assert (tmp / "data" / "events" / "행사" / "marks.jsonl").exists()
+
 def test_scan_job_flow_results_and_thumbnails(world):
     server, ev, tmp, calls = world
     status, _, raw = call(server, "POST", "/api/scan", {"folder": str(ev)})
@@ -313,7 +388,8 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     html = raw.decode("utf-8")
     assert status == 200 and headers["Content-Type"].startswith("text/html")
     assert TOKEN in html and "__TOKEN__" not in html
-    for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/style.css", "css")):
+    for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
+                        ("/review.js", "javascript"), ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
         assert status == 200 and ctype in headers["Content-Type"] and len(raw) > 100
@@ -324,7 +400,7 @@ def test_web_files_follow_the_security_rules():
     web = Path(srv.__file__).parent / "web"
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
-    for f in ("index.html", "app.js", "logic.js", "style.css"):
+    for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f

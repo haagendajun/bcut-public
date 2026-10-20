@@ -16,7 +16,7 @@
 
 API (모두 JSON, 토큰 필요):
   GET  /api/health                      -> {ok, version}
-  GET  /  /app.js  /logic.js  /style.css  -> 화면 파일 (index에 토큰을 넣어 준다)
+  GET  /  /app.js  /logic.js  /review_logic.js  /review.js  /style.css  -> 화면 파일 (토큰 주입)
   POST /api/choose-folder               -> {folder|null}  (맥의 폴더 선택 창)
   POST /api/reveal {path}               -> Finder에서 열기 (이 서버가 만든 정리 결과 폴더만)
   POST /api/scan   {folder}             -> {job}  (백그라운드 분석 시작)
@@ -25,6 +25,8 @@ API (모두 JSON, 토큰 필요):
   GET  /api/jobs/<job>/thumb/<파일>      -> JPEG 썸네일
   GET  /api/jobs/<job>/photo/<파일>?size=view|full -> 사진 (내장 JPEG)
   POST /api/jobs/<job>/sort {rescue, commit, out, by_reason} -> 미리보기 또는 정리 결과
+  GET  /api/jobs/<job>/marks            -> {marks: [{file, size, kind}], broken}  (셀렉·보류·버릴컷)
+  POST /api/jobs/<job>/marks {file, kind|null} -> {file, size, kind}  (표시, 앞 표시는 취소)
 """
 
 from __future__ import annotations
@@ -45,6 +47,7 @@ from bcut import __version__
 from bcut.organize import SortError, run_sort
 from bcut.report.csv_report import write_csv
 from bcut.scan import PhotoResult, count_by_status, list_photos, scan_folder
+from bcut.ui.marks import MarkStore, file_size, list_marks, post_mark
 
 LOOPBACK = "127.0.0.1"
 MAX_BODY = 1_000_000  # 요청 본문 상한 (바이트)
@@ -182,7 +185,8 @@ def default_reveal(path: Path) -> None:
 
 WEB_DIR = Path(__file__).parent / "web"
 STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "text/javascript"),
-          "/style.css": ("style.css", "text/css")}
+          "/review_logic.js": ("review_logic.js", "text/javascript"),
+          "/review.js": ("review.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
 
 
 class AppState:
@@ -193,6 +197,7 @@ class AppState:
         self.jobs: dict[str, ScanJob] = {}
         self.revealable: set[str] = set()  # 이 서버가 만든 정리 결과 폴더만 Finder에서 열 수 있다
         self.lock = threading.Lock()
+        self.marks = MarkStore(cfg.data_dir / "events")  # 셀렉·보류·버릴 컷 표시 (행사 단위)
 
     def start_scan(self, folder: Path) -> ScanJob:
         job_id = secrets.token_hex(6)
@@ -404,13 +409,25 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.CONFLICT, {"error": "분석이 아직 끝나지 않았다",
                                                     "state": job.state})
         if method == "GET" and rest == "/results":
-            return self._send(HTTPStatus.OK, {"rows": [_row(r) for r in job.results]})
+            return self._send(HTTPStatus.OK, {"rows": [
+                {**_row(r), "size": file_size(job.folder / r.file)} for r in job.results]})
+        if rest == "/marks" and method in ("GET", "POST"):
+            return self._marks(job, method)
         m = re.fullmatch(r"/(thumb|photo)/(.+)", rest)
         if method == "GET" and m:
             return self._image(job, m.group(1), m.group(2), params)
         if method == "POST" and rest == "/sort":
             return self._sort(job)
         self._send(HTTPStatus.NOT_FOUND, {"error": "없는 주소"})
+
+    def _marks(self, job: ScanJob, method: str) -> None:
+        names = set(job.by_name())
+        if method == "GET":
+            return self._send(HTTPStatus.OK, list_marks(self.state.marks, job.folder, names))
+        body = self._json_body()
+        if body is not None:
+            status, payload = post_mark(self.state.marks, job.folder, names, body)
+            self._send(HTTPStatus(status), payload)
 
     def _image(self, job: ScanJob, kind: str, name: str, params: dict[str, str]) -> None:
         result = job.by_name().get(name)  # 분석 결과에 있는 파일 이름만 (경로 조작 방지)

@@ -40,7 +40,9 @@
 | 파일 | 지금 하는 일 | 이번에 | 관련 FR |
 |---|---|---|---|
 | `src/bcut/ui/web/logic.js` | 화면의 순수 함수(분류·정렬·집계) | **수정**: 표시 규칙(하나만, 새 표시가 앞 표시를 취소), 실행 취소 기록, 필름스트립 순서·흐리게·건너뛰기, 최종 확인 집계, 담기 계획 | 21~23, 27 |
-| `src/bcut/ui/web/app.js` | 화면 그리기·이벤트 | **수정**: 훑기 화면(`renderReview`), 최종 확인(`renderFinal`), 키보드 처리, 요약 화면의 "훑기 시작/이어서 훑기", 담기 창에 셀렉·보류 폴더, "남기기" 제거 | 21~25, 27 |
+| `src/bcut/ui/web/app.js` | 화면 그리기·이벤트 (이미 400줄을 넘음) | **수정**: 요약 화면의 "훑기 시작/이어서 훑기", 훑기 모드 연결(`review.js`로 위임), 2단계에서 담기 창(셀렉·보류 폴더)·"남기기" 제거. **담기 창 코드는 2단계에서 별도 파일로 나눈다** | 21~25, 27 |
+| `src/bcut/ui/web/review.js` | (없음) | **신규 (1단계 완료)**: 훑기 화면(큰 사진, 오른쪽 정보, 필름스트립), 키보드, 사진 메모리 캐시·미리 받기 | 21, 22 |
+| `src/bcut/ui/web/review_logic.js` | (없음) | **신규 (1단계 완료)**: 순서·표시·이동·집계 순수 함수 | 21, 22 |
 | `src/bcut/ui/web/style.css` | 밝은/어두운 스타일 | **수정**: 훑기 화면 전용 어두운 스타일(`lt-` 접두어 클래스), 표시 색+아이콘 | 21, 22 |
 | `src/bcut/ui/web/index.html` | 화면 뼈대 | 변경 없음 (토큰 주소만 주입) | - |
 | `src/bcut/ui/server.py` | 로컬 서버, 검사·사진·담기 API | **수정**: 표시 저장·조회 API, 얼굴 위치 API, 훑기 기록 API, 결과 행에 파일 크기 추가 | 22~24, 26 |
@@ -78,7 +80,7 @@
 | 요청 | 하는 일 |
 |---|---|
 | `GET /api/jobs/<job>/marks` | 이 행사의 현재 표시 목록 `{marks:[{file,size,kind}]}` |
-| `PUT /api/jobs/<job>/marks` `{file, kind \| null}` | 표시 달기/해제. 앞 표시는 자동 취소. 취소된 이력은 파일에 남음 |
+| `POST /api/jobs/<job>/marks` `{file, kind \| null}` | 표시 달기/해제. 앞 표시는 자동 취소. 취소된 이력은 파일에 남음 (서버가 PUT을 허용하지 않아 POST로 함) |
 | `GET /api/jobs/<job>/faces/<파일>` | 얼굴 박스·눈 위치 `{w,h,faces:[{bbox,eyes}]}`. 기존 얼굴 인식을 불러서 계산 (FR-24) |
 | `POST /api/jobs/<job>/review` `{started_at, ended_at, seen, pick, maybe, discard}` | 훑기 기록 저장 (FR-26) |
 | `POST /api/jobs/<job>/sort` (기존) | 담기에 현재 표시를 반영. 기존 `rescue` 입력은 제거하고 표시로 대체 |

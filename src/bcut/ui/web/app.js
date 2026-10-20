@@ -2,12 +2,13 @@
 (function () {
   'use strict';
   var L = window.BcutLogic;
+  var Review = window.BcutReview;
   var root = document.getElementById('app');
   var TOKEN = root.dataset.token;
   var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {},
            mode: 'priority', open: {candidate: true, review: true, rescued: true, normal: false, other: false},
            tier: 'flagged', reason: null, note: null, sort: 'confidence', size: 230, error: null,
-           list: [], viewerIndex: -1, full: false, sortModal: null};
+           list: [], viewerIndex: -1, full: false, sortModal: null, markCount: 0};
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -128,8 +129,21 @@
     return api('GET', '/api/jobs/' + S.job + '/results').then(function (j) {
       S.rows = j.rows; loadRescued(); S.view = 'results'; S.mode = 'priority'; S.tier = 'flagged'; S.reason = null; S.note = null;
       S.open = {candidate: true, review: true, rescued: true, normal: false, other: false}; render();
+      refreshMarkCount();
     });
   }
+  /* ---- 훑기 모드 (review.js) ---- */
+  function refreshMarkCount() {
+    api('GET', '/api/jobs/' + S.job + '/marks').then(function (j) { S.markCount = j.marks.length; render(); }).catch(function () {});
+  }
+  function startReview() {
+    api('GET', '/api/jobs/' + S.job + '/marks').then(function (j) { Review.open(S.rows, j.marks); })
+      .catch(function (e) { S.error = e.message; render(); });
+  }
+  Review.init({el: el, api: api, job: function () { return S.job; }, thumbUrl: thumbUrl, photoUrl: photoUrl,
+               rerender: function () { render(); },
+               onClose: function () { render(); refreshMarkCount(); }});
+
   function renderProgress() {
     var w = el('div', 'wrap'); var c = el('div', 'center');
     c.appendChild(el('h1', null, '사진을 검사하는 중이에요…'));
@@ -269,9 +283,11 @@
     var act = el('div', 'actions');
     var other = el('button', 'ghost', '다른 폴더 열기');
     other.addEventListener('click', function () { S.view = 'start'; S.rows = []; render(); });
-    var sortBtn = el('button', 'primary', '폴더로 나누어 담기…');
+    var sortBtn = el('button', null, '폴더로 나누어 담기…');
     sortBtn.addEventListener('click', openSort);
-    act.appendChild(other); act.appendChild(sortBtn); bar.appendChild(act);
+    var reviewBtn = el('button', 'primary', S.markCount ? '이어서 훑기' : '훑기 시작');
+    reviewBtn.addEventListener('click', startReview);
+    act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
     w.appendChild(bar);
     w.appendChild(overview(c));
     var tb = el('div', 'toolbar');
@@ -386,10 +402,13 @@
     var main = S.view === 'results' ? renderResults() : S.view === 'progress' ? renderProgress() : renderStart();
     root.appendChild(main);
     var v = S.viewerIndex >= 0 ? renderViewer() : null; if (v) root.appendChild(v);
+    var rv = Review.render(); if (rv) root.appendChild(rv);
+    document.body.classList.toggle('lt-open', Review.isOpen());
     var m = renderSort(); if (m) root.appendChild(m);
     window.scrollTo(0, scroll);
   }
   document.addEventListener('keydown', function (e) {
+    if (Review.isOpen()) { if (Review.handleKey(e)) e.preventDefault(); return; }
     if (S.viewerIndex < 0 || S.sortModal) return;
     var r = S.list[S.viewerIndex];
     if (e.key === 'Escape') closeViewer();
