@@ -1,0 +1,38 @@
+{
+  "frozen_at": "2026-10-20T08:07:47",
+  "tests_at_freeze": "383 passed, 1 skipped in 1.88s",
+  "statement": "이 시점 이후 판정 로직(임계값, 규칙, 판정 코드)을 바꾸지 않는다. 바꾸면 이 홀드아웃은 더 이상 홀드아웃이 아니다.",
+  "tool_version": "0.1.0",
+  "config_version": "default-0",
+  "reason_tiers": {
+    "eyes_closed": "candidate",
+    "blur": "review",
+    "out_of_focus": "review",
+    "exposure": "review"
+  },
+  "thresholds": {
+    "eyes": {
+      "candidate_max": 0.134,
+      "review_max": 0.162,
+      "min_eye_width_frac": 0.0073,
+      "group_face_ratio": 0.5,
+      "group_downgrades_candidate": true
+    },
+    "exposure": {
+      "face_hi_frac": 0.2,
+      "global_hi_frac": 0.3,
+      "dark_p99": 120.0,
+      "group_face_ratio": 0.5
+    },
+    "sharpness": {
+      "best_blur_min": 0.55,
+      "face_blur_min": 0.62,
+      "min_face_px": 420,
+      "group_face_ratio": 0.5
+    }
+  },
+  "logic_code_sha256": "46b22dd5d043b4f875989df6c7605c03ceae42097bf7d7a7795a521d90e1a518",
+  "requirements_lock_sha256": "e4b518f736836f542394a471d363deacdbc64d10dca115c46aadc76b0ee88867",
+  "holdout_files": 560,
+  "holdout_names_sha256": "d3175eec455e23a351e7bf74b9ae7ad0b6b2ed30a6dbd1d07e737d8d0e3b2970"
+}

@@ -104,7 +104,7 @@ def test_title_does_not_claim_to_pick_the_best_cuts():
 
 
 def test_scope_is_in_payload_and_can_be_extended():
-    assert payload(html())["scope"] == "눈 감김·노출 판정"
+    assert payload(html())["scope"] == "눈 감김·노출·흔들림·초점 판정"
     assert payload(html(scope="눈 감김·흔들림 판정"))["scope"] == "눈 감김·흔들림 판정"
 
 

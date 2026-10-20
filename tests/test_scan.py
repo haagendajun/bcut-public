@@ -114,7 +114,8 @@ def test_cli_scan_writes_only_to_out_dir(tmp_path, monkeypatch, capsys):
 
     assert main(["scan", "--folder", str(event), "--out", str(out)]) == 0
     assert snapshot(event) == before  # 행사 폴더는 그대로
-    assert sorted(p.name for p in out.iterdir()) == ["bcut-report.csv", "bcut-report.html"]
+    names = sorted(p.name for p in out.iterdir())
+    assert names == ["bcut-log.json", "bcut-report.csv", "bcut-report.html"]
     printed = capsys.readouterr().out
     assert "B컷 후보 1" in printed and "썸네일이 있다" in printed
 
@@ -176,7 +177,20 @@ def test_count_by_reason():
                     exposure_kind="over_face"),
         PhotoResult("d", "normal", 0.3, None, 1, 1, 0.01, None, eyes_status="normal"),
     ]
-    assert count_by_reason(rs) == {"eyes_closed": 2, "exposure": 2, "both": 1}
+    assert count_by_reason(rs) == {"eyes_closed": 2, "exposure": 2, "blur": 0, "out_of_focus": 0,
+                                   "both": 1}
+
+
+def test_count_by_reason_includes_sharpness_reasons():
+    rs = [
+        PhotoResult("a", "review", 0.3, None, 1, 1, 0.01, None, eyes_status="normal",
+                    sharpness_kind="blur"),
+        PhotoResult("b", "candidate", 0.1, None, 1, 1, 0.01, None, eyes_status="candidate",
+                    sharpness_kind="out_of_focus"),
+    ]
+    assert rs[0].reasons == ("blur",) and rs[1].reasons == ("eyes_closed", "out_of_focus")
+    assert count_by_reason(rs) == {"eyes_closed": 1, "exposure": 0, "blur": 1, "out_of_focus": 1,
+                                   "both": 1}
 
 
 # ---- 사진 한 장 판정의 통합 동작 (가짜 사진·가짜 얼굴로, 실제 파일 없이) ---------------
@@ -205,7 +219,7 @@ def _image(base=120, blown_face=False, top_bright=True):
 def _patch(monkeypatch, image, faces):
     from bcut.imageio.embedded import LoadedImage
     monkeypatch.setattr(scan_module, "read_embedded_jpeg",
-                        lambda p: LoadedImage(image=image, full_width=W, full_height=H))
+                        lambda p, width=0: LoadedImage(image=image, full_width=W, full_height=H))
     monkeypatch.setattr(scan_module, "detect_faces", lambda im: faces)
 
 
@@ -264,3 +278,63 @@ def test_thumbnail_is_skipped_for_statuses_not_requested(monkeypatch, tmp_path):
     assert r.status == "normal" and r.thumbnail is None
     _patch(monkeypatch, _image(blown_face=True), [_face(0.30)])
     assert analyze_photo(tmp_path / "a.CR3", thumb_statuses=FLAGGED_STATUSES).thumbnail
+
+
+def test_blurry_photo_is_review_for_sharpness_only(monkeypatch, tmp_path):
+    _patch(monkeypatch, _image(), [_face(0.30)])
+    monkeypatch.setattr(scan_module, "best_tile_blur", lambda gray: 0.7)
+    r = analyze_photo(tmp_path / "a.CR3")
+    assert r.status == "review" and r.reasons == ("blur",) and r.sharpness_kind == "blur"
+    assert r.eyes_status == "normal" and r.sharpness_severity == pytest.approx(0.7)
+
+
+def test_sharpness_never_makes_candidate_by_default():
+    assert combine_status("normal", False, "review", True, "review") == "review"
+    assert combine_status("normal", False, "review", True, "candidate") == "candidate"
+    assert combine_status("candidate", False, "review", True, "review") == "candidate"
+
+
+def test_eyes_tier_review_demotes_candidate(monkeypatch, tmp_path):
+    _patch(monkeypatch, _image(), [_face(0.05)])
+    r = analyze_photo(tmp_path / "a.CR3", eyes_tier="review")
+    assert r.status == "review" and r.eyes_status == "review" and r.reasons == (EYES_CLOSED,)
+    assert analyze_photo(tmp_path / "a.CR3").status == "candidate"
+
+
+def test_sharpness_tier_is_chosen_per_kind(monkeypatch, tmp_path):
+    _patch(monkeypatch, _image(), [_face(0.30)])
+    monkeypatch.setattr(scan_module, "best_tile_blur", lambda gray: 0.7)
+    tiers = {"blur": "candidate", "out_of_focus": "review"}
+    assert analyze_photo(tmp_path / "a.CR3", sharpness_tiers=tiers).status == "candidate"
+    assert analyze_photo(tmp_path / "a.CR3", sharpness_tiers={"blur": "review"}).status == "review"
+
+
+# ---- 확신도 ------------------------------------------------------------------------
+
+def test_confidence_none_when_nothing_flagged(monkeypatch, tmp_path):
+    _patch(monkeypatch, _image(), [_face(0.30)])
+    assert analyze_photo(tmp_path / "a.CR3").confidence is None
+
+
+def test_confidence_validated_reason_ranks_above_review_only(monkeypatch, tmp_path):
+    from bcut.scan import confidence_of
+    assert confidence_of([("candidate", 0.0)]) == 0.5
+    assert confidence_of([("review", 1.0)]) == 0.5  # review 최대 = candidate 최소
+    assert confidence_of([("candidate", 1.0), ("review", 1.0)]) == 1.0
+    assert confidence_of([]) is None
+    _patch(monkeypatch, _image(), [_face(0.02)])
+    deep = analyze_photo(tmp_path / "a.CR3").confidence
+    _patch(monkeypatch, _image(), [_face(0.13)])
+    edge = analyze_photo(tmp_path / "a.CR3").confidence
+    assert deep > edge >= 0.5
+
+
+def test_eyes_strength_bands():
+    from bcut.scan import eyes_strength
+    from bcut.score.eyes import EyesThresholds
+    t = EyesThresholds()
+    assert eyes_strength(0.0, "candidate", t) == 1.0
+    assert eyes_strength(t.candidate_max, "candidate", t) == 0.0
+    assert eyes_strength(t.candidate_max, "review", t) == 1.0
+    assert eyes_strength(t.review_max, "review", t) == 0.0
+    assert eyes_strength(None, "review", t) == 0.0

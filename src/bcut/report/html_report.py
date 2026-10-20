@@ -17,8 +17,9 @@ from collections.abc import Sequence
 from bcut.scan import PhotoResult
 from bcut.score.exposure import ExposureThresholds
 from bcut.score.eyes import EyesThresholds
+from bcut.score.sharpness import SharpnessThresholds
 
-DEFAULT_SCOPE = "눈 감김·노출 판정"  # 지금 판정하는 사유. 흔들림·초점이 들어오면 늘린다
+DEFAULT_SCOPE = "눈 감김·노출·흔들림·초점 판정"  # 지금 판정하는 사유
 
 
 def default_title(folder_name: str) -> str:
@@ -37,6 +38,7 @@ def build_payload(
     generated_at: str,
     thresholds: EyesThresholds,
     exposure_thresholds: ExposureThresholds,
+    sharpness_thresholds: SharpnessThresholds,
     thumbs_mode: str,
     title: str,
     scope: str,
@@ -56,6 +58,9 @@ def build_payload(
             "exposureFaceHi": exposure_thresholds.face_hi_frac,
             "exposureGlobalHi": exposure_thresholds.global_hi_frac,
             "exposureDarkP99": exposure_thresholds.dark_p99,
+            "sharpBest": sharpness_thresholds.best_blur_min,
+            "sharpFace": sharpness_thresholds.face_blur_min,
+            "sharpFacePx": sharpness_thresholds.min_face_px,
         },
         "photos": [
             {
@@ -64,6 +69,8 @@ def build_payload(
                 "sc": r.score, "nt": r.note,
                 "xk": r.exposure_kind, "xp": r.exposure_p99, "xf": r.exposure_face_hi,
                 "xg": r.exposure_global_hi, "xs": r.exposure_severity,
+                "bk": r.sharpness_kind, "bb": r.sharpness_best, "bf": r.sharpness_face,
+                "bs": r.sharpness_severity, "cf": r.confidence,
                 "rs": list(r.reasons),
                 "fc": r.face_count, "cc": r.faces_considered, "ew": r.eye_width_frac,
                 "er": r.error, "th": _data_uri(r.thumbnail) if r.thumbnail else None,
@@ -86,6 +93,7 @@ def render_html(
     generated_at: str,
     thresholds: EyesThresholds | None = None,
     exposure_thresholds: ExposureThresholds | None = None,
+    sharpness_thresholds: SharpnessThresholds | None = None,
     thumbs_mode: str = "all",
     title: str | None = None,
     scope: str = DEFAULT_SCOPE,
@@ -95,6 +103,7 @@ def render_html(
         results, folder_name=folder_name, generated_at=generated_at,
         thresholds=thresholds or EyesThresholds(),
         exposure_thresholds=exposure_thresholds or ExposureThresholds(),
+        sharpness_thresholds=sharpness_thresholds or SharpnessThresholds(),
         thumbs_mode=thumbs_mode, title=title, scope=scope,
     )
     safe_title = (title.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
@@ -164,7 +173,9 @@ button[aria-pressed=true]{background:var(--accent);color:var(--bg);border-color:
 <label for="sort">정렬</label>
 <select id="sort">
 <option value="score">가장 감긴 순 (눈 점수 낮은 순)</option>
+<option value="conf">확신도 높은 순</option>
 <option value="exposure">노출 이상이 심한 순</option>
+<option value="sharp">흐림이 심한 순</option>
 <option value="name">파일 이름순</option>
 <option value="faces">얼굴 많은 순</option>
 </select>
@@ -186,7 +197,7 @@ var D=JSON.parse(document.getElementById('data').textContent);
 var P=D.photos;
 var STATUS={candidate:'B컷 후보',review:'사람이 확인',normal:'정상',no_face:'얼굴 없음',unscorable:'판정 불가'};
 var NOTE={small_eye:'눈이 좁음',group:'단체 사진',read_error:'읽기 실패'};
-var REASON={eyes_closed:'눈 감김',exposure:'노출'};
+var REASON={eyes_closed:'눈 감김',exposure:'노출',blur:'흔들림',out_of_focus:'초점 실패'};
 var XKIND={over_face:'얼굴이 하얗게 날아감',over_global:'사진이 하얗게 날아감',under:'너무 어두움'};
 var TIERS=[['flagged','후보+확인'],['candidate','B컷 후보'],['review','사람이 확인'],['normal','정상'],['other','얼굴 없음·판정 불가'],['all','전체']];
 var st={tier:'flagged',reason:null,note:null,sort:'score'};
@@ -209,6 +220,10 @@ function visible(){
   return inTier(p,st.tier)&&(!st.reason||p.rs.indexOf(st.reason)>=0)&&(!st.note||p.nt===st.note);});
  if(st.sort==='name')list.sort(function(a,b){return a.f<b.f?-1:a.f>b.f?1:0;});
  else if(st.sort==='faces')list.sort(function(a,b){return b.fc-a.fc||(a.f<b.f?-1:1);});
+ else if(st.sort==='conf')list.sort(function(a,b){
+  var x=a.cf===null?-1:a.cf,y=b.cf===null?-1:b.cf;return y-x||(a.f<b.f?-1:1);});
+ else if(st.sort==='sharp')list.sort(function(a,b){
+  var x=a.bs===null?-1:a.bs,y=b.bs===null?-1:b.bs;return y-x||(a.f<b.f?-1:1);});
  else if(st.sort==='exposure')list.sort(function(a,b){
   var x=a.xs===null?-1:a.xs,y=b.xs===null?-1:b.xs;return y-x||(a.f<b.f?-1:1);});
  else list.sort(function(a,b){
@@ -226,10 +241,12 @@ function renderStatic(){
  document.getElementById('meta').textContent=D.scope+' · 사진 '+P.length+'장 · 만든 시각 '+D.generatedAt+
   ' · 눈 기준: 후보 점수 \\u2264 '+th.candidate+', 확인 \\u2264 '+th.review+', 눈 폭 비율 < '+th.minEyeWidthFrac+
   ' · 노출 기준: 얼굴 날아감 \\u2265 '+Math.round(th.exposureFaceHi*100)+'%(얼굴 없으면 전체 \\u2265 '+Math.round(th.exposureGlobalHi*100)+'%), 상위 1% 밝기 \\u2264 '+th.exposureDarkP99+
+  ' · 흐림 기준: 가장 선명한 곳 \\u2265 '+th.sharpBest+', 얼굴(폭 '+th.sharpFacePx+'px 이상) \\u2265 '+th.sharpFace+
   ' · 썸네일 '+(D.thumbsMode==='all'?'전체':'후보·확인·판정 불가만');
  var cards=document.getElementById('cards');
  [['t','candidate','B컷 후보'],['t','review','사람이 확인'],['t','normal','정상'],['t','other','얼굴 없음·판정 불가'],
-  ['r','eyes_closed','눈 감김으로 올라온 컷'],['r','exposure','노출로 올라온 컷']].forEach(function(c){
+  ['r','eyes_closed','눈 감김으로 올라온 컷'],['r','exposure','노출로 올라온 컷'],
+  ['r','blur','흔들림으로 올라온 컷'],['r','out_of_focus','초점 실패로 올라온 컷']].forEach(function(c){
   var n=c[0]==='t'?count(c[1]):countReason(c[1]);
   var d=el('div','card');d.appendChild(el('div','n',String(n)));d.appendChild(el('div','l',c[2]));cards.appendChild(d);});
  var tiers=document.getElementById('tiers');
@@ -255,7 +272,7 @@ function renderStatic(){
  document.getElementById('dl-visible').addEventListener('click',function(){
   download('bcut-visible.txt',visible().map(function(p){return p.f;}));});
  document.getElementById('clear-saved').addEventListener('click',function(){saved={};persist();render();});
- document.getElementById('foot').textContent='\"정상\"은 눈 감김과 노출에 이상이 없다는 뜻이고, A컷이라는 뜻은 아니에요. 좋은 컷을 고르는 일은 사람이 해요. 눈 점수는 두 눈 중 덜 감긴 쪽 눈의 열림 비율이에요(낮을수록 감김). 노출은 얼굴이 하얗게 날아가거나 사진 전체가 너무 어두운 명백한 경우만 \"사람이 확인\"으로 보내요(가벼운 노출 어긋남은 잡지 않아요). 썸네일의 상자는 눈 감김 판정에 쓴 얼굴이에요(굵은 상자가 등급을 정한 얼굴).';
+ document.getElementById('foot').textContent='\"정상\"은 눈 감김, 노출, 흔들림·초점에 이상이 없다는 뜻이고, A컷이라는 뜻은 아니에요. 좋은 컷을 고르는 일은 사람이 해요. 눈 점수는 두 눈 중 덜 감긴 쪽 눈의 열림 비율이에요(낮을수록 감김). 노출은 얼굴이 하얗게 날아가거나 사진 전체가 너무 어두운 명백한 경우만 \"사람이 확인\"으로 보내요(가벼운 노출 어긋남은 잡지 않아요). 흔들림·초점 실패도 사진 어디에도 선명한 곳이 없거나 얼굴이 분명히 흐린 경우만 \"사람이 확인\"으로 보내고, 얼굴이 작은 컷(폭 '+th.sharpFacePx+'px 미만)은 얼굴 흐림을 판정하지 않아요. 썸네일의 상자는 눈 감김 판정에 쓴 얼굴이에요(굵은 상자가 등급을 정한 얼굴).';
 }
 function render(){
  document.querySelectorAll('#tiers button').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.tier===st.tier));});
@@ -274,10 +291,11 @@ function render(){
   var r1=el('div','row');r1.appendChild(el('span','badge '+badgeClass(p.st),STATUS[p.st]||p.st));
   if(p.rs.indexOf('eyes_closed')>=0)r1.appendChild(el('span','badge '+badgeClass(p.es),'눈 감김'));
   if(p.xk)r1.appendChild(el('span','badge b-review','노출: '+(XKIND[p.xk]||p.xk)));
+  if(p.bk)r1.appendChild(el('span','badge b-review',REASON[p.bk]||p.bk));
   if(p.nt)r1.appendChild(el('span','badge b-other',NOTE[p.nt]||p.nt));
   body.appendChild(r1);
   var r2=el('div','row muted');
-  r2.textContent=(p.sc===null?'눈 점수 없음':'눈 점수 '+p.sc.toFixed(3))+' · 얼굴 '+p.fc+(p.cc>1?' (판정 '+p.cc+')':'');
+  r2.textContent=(p.sc===null?'눈 점수 없음':'눈 점수 '+p.sc.toFixed(3))+' · 얼굴 '+p.fc+(p.cc>1?' (판정 '+p.cc+')':'')+(p.cf===null||p.cf===undefined?'':' · 확신도 '+p.cf.toFixed(2));
   body.appendChild(r2);
   if(p.xk){
    var r3=el('div','row muted');
@@ -286,6 +304,11 @@ function render(){
    else if(p.xk==='over_global')line+=' · 사진 날아감 '+Math.round(p.xg*100)+'%';
    r3.textContent=line;
    body.appendChild(r3);
+  }
+  if(p.bk){
+   var r4=el('div','row muted');
+   r4.textContent=(p.bk==='blur'?'가장 선명한 곳도 흐림 ':'얼굴 흐림 ')+(p.bk==='blur'?p.bb:p.bf).toFixed(2)+' (클수록 흐림)';
+   body.appendChild(r4);
   }
   if(p.er){body.appendChild(el('div','muted','오류: '+p.er));}
   var b=el('button',null,saved[p.f]?'살림 취소':'살리기');

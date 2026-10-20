@@ -15,6 +15,13 @@ BANNED_IMPORTS = {
 BANNED_CALLS = {"remove", "unlink", "rmtree", "rmdir", "removedirs"}
 
 
+# 로컬 서버(Phase 3b S2)만 예외다 (사용자 승인 2026-10-20). 이 파일은 `http`만 쓸 수 있고, 그것도
+# 서버 쪽(`http.server`, `HTTPStatus`)만이다. 나머지 금지 모듈(socket, urllib 등)은
+# 이 파일에서도 금지다.
+SERVER_FILE = SRC / "ui" / "server.py"
+SERVER_ALLOWED = {"http"}
+
+
 def _sources():
     return sorted(SRC.rglob("*.py"))
 
@@ -33,7 +40,9 @@ def test_no_network_imports():
                 names = [a.name.split(".")[0] for a in node.names]
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module.split(".")[0]]
-            offenders += [f"{path.name}: {n}" for n in names if n in BANNED_IMPORTS]
+            allowed = SERVER_ALLOWED if path == SERVER_FILE else set()
+            offenders += [f"{path.name}: {n}" for n in names
+                          if n in BANNED_IMPORTS and n not in allowed]
     assert not offenders, f"네트워크 모듈 import 금지(C1): {offenders}"
 
 
@@ -48,3 +57,36 @@ def test_no_delete_calls():
                 if name in BANNED_CALLS:
                     offenders.append(f"{path.name}: {name}()")
     assert not offenders, f"삭제 호출 금지(C3): {offenders}"
+
+
+def _http_imports(tree):
+    """`http` 패키지에서 가져온 것들 (모듈 경로나 이름)."""
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [a.name for a in node.names if a.name.split(".")[0] == "http"]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.split(".")[0] == "http":
+                found += [f"{node.module}:{a.name}" for a in node.names]
+    return found
+
+
+def test_only_the_local_server_may_use_http_and_only_its_server_side():
+    users = []
+    for path in _sources():
+        found = _http_imports(ast.parse(path.read_text(encoding="utf-8")))
+        if found:
+            users.append(path)
+    assert users == [SERVER_FILE]
+    found = _http_imports(ast.parse(SERVER_FILE.read_text(encoding="utf-8")))
+    allowed = {"http:HTTPStatus", "http.server:BaseHTTPRequestHandler",
+               "http.server:ThreadingHTTPServer"}
+    extra = set(found) - allowed  # 접속하는 쪽(클라이언트) 모듈은 여기에 걸린다
+    assert not extra, f"서버 쪽이 아닌 http 사용: {extra}"
+
+
+def test_server_has_no_wildcard_or_external_bind_and_no_client_code():
+    text = SERVER_FILE.read_text(encoding="utf-8")
+    for bad in ("0.0.0.0", '"::"', "'::'", "create_connection", "urlopen", "http.client",
+                "HTTPConnection", "HTTPSConnection", ".connect("):
+        assert bad not in text, f"서버 파일에 금지된 표현: {bad}"

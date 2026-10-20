@@ -24,6 +24,9 @@ bcut = "bcut.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"bcut.ui" = ["web/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # 개발 모드 설치 파일(.pth)에 macOS 숨김 표시가 붙으면 Python 3.13이 무시한다. 그래도 테스트가 돌게 한다.
@@ -42,7 +45,12 @@ select = ["E", "F", "I", "B", "UP"]
 # 실험·측정 스크립트도 같다. src/와 tests/는 줄 길이 규칙을 그대로 지킨다
 "eval/*.py" = ["E501"]
 "tools/extract_*.py" = ["E501"]
+"tools/freeze_holdout.py" = ["E501"]
 # HTML 리포트 템플릿 안의 자바스크립트는 줄이 길다
 "src/bcut/report/html_report.py" = ["E501"]
 # 화면 코드(JS) 검증 테스트도 JS 문자열 때문에 줄이 길다
 "tests/test_report_js.py" = ["E501"]
+"tests/test_ui_logic.py" = ["E501"]
+"tests/test_ui_server.py" = ["E501"]
+"tests/test_organize.py" = ["E501"]
+"tests/test_electron_shell.py" = ["E501"]

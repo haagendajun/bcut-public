@@ -153,7 +153,7 @@ def obs():
 
 def test_runs_without_error_and_shows_title_and_meta(obs):
     assert obs["title"] == "행사 A · 1차 컷 리포트"  # 제목에 행사 이름
-    assert obs["meta"].startswith("눈 감김·노출 판정 · 사진 7장")  # 부제목에 판정 범위
+    assert obs["meta"].startswith("눈 감김·노출·흔들림·초점 판정 · 사진 7장")  # 부제목에 판정 범위
     assert "만든 시각 2026-10-19 18:00" in obs["meta"]
 
 
@@ -164,7 +164,8 @@ def test_footer_says_normal_is_not_a_cut_grade(obs):
 
 def test_summary_cards(obs):
     assert obs["cards"] == ["2:B컷 후보", "3:사람이 확인", "1:정상", "1:얼굴 없음·판정 불가",
-                            "4:눈 감김으로 올라온 컷", "0:노출로 올라온 컷"]
+                            "4:눈 감김으로 올라온 컷", "0:노출로 올라온 컷", "0:흔들림으로 올라온 컷",
+                            "0:초점 실패로 올라온 컷"]
 
 
 def test_default_view_shows_candidates_and_reviews_most_closed_first(obs):
@@ -304,8 +305,9 @@ def obs2():
 
 def test_reason_cards_and_buttons(obs2):
     assert obs2["cards"] == ["1:B컷 후보", "4:사람이 확인", "1:정상", "0:얼굴 없음·판정 불가",
-                             "2:눈 감김으로 올라온 컷", "4:노출로 올라온 컷"]
-    assert obs2["reasonLabels"] == ["판정 종류", "눈 감김 2", "노출 4"]
+                             "2:눈 감김으로 올라온 컷", "4:노출로 올라온 컷", "0:흔들림으로 올라온 컷",
+                             "0:초점 실패로 올라온 컷"]
+    assert obs2["reasonLabels"] == ["판정 종류", "눈 감김 2", "노출 4", "흔들림 0", "초점 실패 0"]
     assert "노출 기준" in obs2["meta"] and "상위 1% 밝기" in obs2["meta"]
 
 
@@ -353,3 +355,62 @@ def test_exposure_detail_line_depends_on_kind(obs2):
 
 def test_eye_score_line_for_photos_without_a_face(obs2):
     assert obs2["d2"][2] == "눈 점수 없음 · 얼굴 0"
+
+
+# ---- 흔들림·초점 사유 ----------------------------------------------------------------
+
+def sx(name, status, kind, best, face, severity, eyes="normal"):
+    return PhotoResult(
+        file=name, status=status, score=0.3, note=None, face_count=1, faces_considered=1,
+        eye_width_frac=0.01, thumbnail=None, eyes_status=eyes, sharpness_kind=kind,
+        sharpness_best=best, sharpness_face=face, sharpness_severity=severity)
+
+
+SAMPLE3 = [
+    sx("s1.CR3", "review", "blur", 0.70, 0.80, 0.70),
+    sx("s2.CR3", "review", "out_of_focus", 0.30, 0.75, 0.75),
+    sx("s3.CR3", "candidate", "blur", 0.60, None, 0.60, eyes="candidate"),
+    sx("s4.CR3", "normal", None, 0.30, 0.40, None),
+]
+
+DRIVER3 = r"""
+function names(){return REG['grid'].children.map(function(it){
+ return it.children.length>1?it.children[1].children[0].textContent:'(empty)';});}
+function clickReason(k){REG['reasons'].children.filter(function(b){return b.dataset.reason===k;})[0].click();}
+function setSort(v){REG['sort'].fire('change',{target:{value:v}});}
+function card(n){return REG['grid'].children.filter(function(it){
+ return it.children.length>1&&it.children[1].children[0].textContent===n;})[0];}
+var obs={};
+obs.cards=REG['cards'].children.map(function(c){return c.children[0].textContent+':'+c.children[1].textContent;});
+obs.reasonLabels=REG['reasons'].children.map(function(b){return b.textContent;});
+obs.meta=REG['meta'].textContent;
+clickReason('blur');obs.blur=names();
+setSort('sharp');obs.blurBySeverity=names();setSort('score');
+clickReason('blur');clickReason('out_of_focus');obs.oof=names();
+obs.oofBadges=card('s2.CR3').children[1].children[1].children.map(function(c){return c.textContent;});
+obs.oofBody=card('s2.CR3').children[1].children.map(function(c){return c.textContent;});
+JSON.stringify(obs);
+"""
+
+
+@pytest.fixture(scope="module")
+def obs3():
+    html = render_html(SAMPLE3, folder_name="행사 C", generated_at="2026-10-19 18:00")
+    return run_report_js(html, driver=DRIVER3)
+
+
+def test_sharpness_cards_and_buttons(obs3):
+    assert obs3["cards"][-2:] == ["2:흔들림으로 올라온 컷", "1:초점 실패로 올라온 컷"]
+    assert obs3["reasonLabels"] == ["판정 종류", "눈 감김 1", "노출 0", "흔들림 2", "초점 실패 1"]
+    assert "흐림 기준" in obs3["meta"]
+
+
+def test_sharpness_filter_and_sort(obs3):
+    assert sorted(obs3["blur"]) == ["s1.CR3", "s3.CR3"]
+    assert obs3["blurBySeverity"] == ["s1.CR3", "s3.CR3"]  # 흐림이 심한 순
+    assert obs3["oof"] == ["s2.CR3"]
+
+
+def test_sharpness_badge_and_detail_line(obs3):
+    assert "초점 실패" in obs3["oofBadges"]
+    assert any("얼굴 흐림 0.75" in t for t in obs3["oofBody"])

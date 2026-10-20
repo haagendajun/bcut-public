@@ -1,7 +1,7 @@
 import pytest
 
 from bcut import __version__
-from bcut.cli import NOT_IMPLEMENTED, USAGE_ERROR, build_parser, main, resolve_out_dir
+from bcut.cli import USAGE_ERROR, build_parser, main, resolve_out_dir
 
 
 def test_help_lists_all_commands(capsys):
@@ -24,19 +24,28 @@ def test_version(capsys):
     assert __version__ in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("command", ["apply", "rollback"])
-def test_unimplemented_command_changes_nothing(command, tmp_path, capsys, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    code = main([command])
-    assert code == NOT_IMPLEMENTED
-    assert "구현되지 않았다" in capsys.readouterr().err
-    assert list(tmp_path.iterdir()) == []
+def test_calibrate_with_too_few_labels_fails_and_writes_nothing(tmp_path, capsys):
+    event = tmp_path / "event"
+    event.mkdir()
+    (event / "a.CR3").write_bytes(b"x")
+    labels = tmp_path / "labels.csv"
+    labels.write_text("file,label\na.CR3,OK\n", encoding="utf-8")
+    out = tmp_path / "cfg.toml"
+    code = main(["calibrate", "--folder", str(event), "--labels", str(labels), "--out", str(out),
+                 "--workers", "1"])
+    assert code == 2 and not out.exists()
+    assert "보정할 수 없다" in capsys.readouterr().err
 
 
-def test_calibrate_is_not_implemented_yet(tmp_path, capsys):
+def test_calibrate_refuses_config_inside_event_folder(tmp_path, capsys):
+    event = tmp_path / "event"
+    event.mkdir()
+    (event / "a.CR3").write_bytes(b"x")
     labels = tmp_path / "labels.csv"
     labels.write_text("file,label\n", encoding="utf-8")
-    assert main(["calibrate", "--labels", str(labels)]) == NOT_IMPLEMENTED
+    assert main(["calibrate", "--folder", str(event), "--labels", str(labels),
+                 "--out", str(event / "cfg.toml")]) == 2
+    assert list(event.iterdir()) == [event / "a.CR3"]
 
 
 def test_scan_rejects_missing_folder(tmp_path):
@@ -102,3 +111,14 @@ def test_scan_refuses_out_dir_inside_event_folder(tmp_path, capsys):
     assert code == USAGE_ERROR
     assert "행사 폴더에 아무것도 쓰지 않는다" in capsys.readouterr().err
     assert sorted(p.name for p in event.iterdir()) == ["a.CR3"]
+
+
+def test_scan_rejects_bad_config(tmp_path, capsys):
+    folder = tmp_path / "ev"
+    folder.mkdir()
+    (folder / "a.CR3").write_bytes(b"x")
+    cfg = tmp_path / "bad.toml"
+    cfg.write_text("[eyes]\nnope = 1\n", encoding="utf-8")
+    assert main(["scan", "--folder", str(folder), "--out", str(tmp_path / "o"),
+                 "--config", str(cfg)]) == 2
+    assert "설정 파일" in capsys.readouterr().err
