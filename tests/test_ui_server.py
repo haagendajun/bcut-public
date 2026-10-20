@@ -490,7 +490,7 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     assert TOKEN in html and "__TOKEN__" not in html
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
                         ("/review.js", "javascript"), ("/sort_view.js", "javascript"),
-                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"),
+                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"),
                         ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
@@ -503,7 +503,7 @@ def test_web_files_follow_the_security_rules():
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
     for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
-              "cloud_view.js", "style.css"):
+              "cloud_view.js", "capture_view.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
@@ -513,7 +513,7 @@ def test_web_files_follow_the_security_rules():
 def test_screen_files_avoid_retired_and_hard_words():
     web = Path(srv.__file__).parent / "web"
     for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js",
-              "cloud_view.js"):
+              "cloud_view.js", "capture_view.js"):
         text = (web / f).read_text(encoding="utf-8")
         for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
             assert word not in text, (f, word)
@@ -654,3 +654,51 @@ def test_cloud_consent_then_login_needed_and_token_required(world):
     assert call(server, "GET", "/api/cloud/status", token=False)[0] == 401
     assert call(server, "POST", "/api/cloud/login", {"email": ""})[0] == 400
     assert call(server, "POST", "/api/cloud/nope", {})[0] == 404
+
+
+# ---- Capture One에도 표시하기 길 (spec S6) ---------------------------------------------------
+
+class FakeCaptureBridge:
+    """Capture One 대역: 읽기만 있고, 쓰기가 불리면 시험이 실패한다 (미리보기 시험용)."""
+
+    def __init__(self, folder):
+        from bcut.bridge.capture_one import VariantInfo
+        self.catalog_name = "bcut-test"
+        self.items = [VariantInfo(str(folder / n), n, 3, 2, (), "1", n) for n in ("A.CR3", "B.CR3")]
+
+    def list_variants(self):
+        return list(self.items)
+
+    def keywords(self):
+        return ["bcut-셀렉", "bcut-보류", "bcut-버릴컷"]
+
+    def backup_catalog(self, location):
+        raise AssertionError("미리보기는 카탈로그에 쓰지 않는다")
+
+    def apply_keyword(self, keyword, refs):
+        raise AssertionError("미리보기는 키워드를 붙이지 않는다")
+
+
+def test_capture_one_route_previews_marks_without_writing(world):
+    server, ev, *_ = world
+    server.app_state.cfg.capture_bridge = lambda catalog: FakeCaptureBridge(ev)
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/capture-one"
+    st, _, raw = call(server, "POST", url, {"action": "preview", "catalog": "bcut-test"})
+    assert st == 200 and "표시한 사진이 없어요" in jbody(raw)["aborted"]
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"})
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "B.CR3", "kind": "discard"})
+    st, _, raw = call(server, "POST", url, {"action": "preview", "catalog": "bcut-test"})
+    out = jbody(raw)
+    assert st == 200 and out["aborted"] is None and out["mode"] == "dry-run"
+    assert out["keyword_counts"] == {"bcut-버릴컷": 1, "bcut-셀렉": 1}
+
+
+def test_capture_one_route_guards(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/capture-one"
+    assert call(server, "POST", url, {"action": "preview", "catalog": "c"}, token=False)[0] == 401
+    assert call(server, "POST", url, {"action": "x", "catalog": "c"})[0] == 400
+    assert call(server, "POST", url, {"action": "preview", "catalog": ""})[0] == 400
+    assert call(server, "GET", url)[0] in (404, 405)

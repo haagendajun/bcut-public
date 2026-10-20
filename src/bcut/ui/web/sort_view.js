@@ -49,7 +49,9 @@
     var reveal = ctx.el('button', 'primary', 'Finder에서 열기');
     reveal.addEventListener('click', function () { ctx.api('POST', '/api/reveal', {path: r.result_dir}).catch(function (e) { M.error = e.message; ctx.rerender(); }); });
     var done = ctx.el('button', null, '닫기'); done.addEventListener('click', close);
-    row.appendChild(reveal); row.appendChild(done); p.appendChild(row);
+    var cap = ctx.el('button', null, 'Capture One에도 표시하기…');
+    cap.addEventListener('click', function () { document.dispatchEvent(new CustomEvent('bcut-open-capture')); });
+    row.appendChild(reveal); row.appendChild(cap); row.appendChild(done); p.appendChild(row);
   }
   function renderPlan(p) {
     var pl = M.plan;

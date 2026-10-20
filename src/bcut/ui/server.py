@@ -30,6 +30,7 @@ API (모두 JSON, 토큰 필요):
   POST /api/jobs/<job>/marks {file, kind|null} -> {file, size, kind}  (표시, 앞 표시는 취소)
   GET  /api/jobs/<job>/faces/<파일>      -> {w, h, faces: [{box, area, eyes}]}  (얼굴·눈 위치)
   GET  /api/cloud/status · POST /api/cloud/consent|login|logout|sync -> 올리기 (cloud_service)
+  POST /api/jobs/<job>/capture-one {catalog, action} -> Capture One에 표시 (미리보기·반영·되돌리기)
   POST /api/jobs/<job>/review {id, started_at, ended_at, seen, pick, maybe, discard} -> 훑기 기록
 """
 
@@ -50,6 +51,7 @@ from bcut import __version__
 from bcut.organize import SortError, run_sort
 from bcut.report.csv_report import write_csv
 from bcut.scan import PhotoResult, count_by_status, list_photos, scan_folder
+from bcut.ui.capture import handle as handle_capture
 from bcut.ui.cloud import SupabaseClient
 from bcut.ui.cloud_service import CloudService
 from bcut.ui.cloud_service import handle as handle_cloud
@@ -123,6 +125,7 @@ class ServerConfig:
     reveal: Callable[[Path], None] | None = None  # Finder에서 열기 (없으면 `open`)
     workers: int | None = None
     cloud: CloudService | None = None  # 올리기 서비스 (없으면 실제 슈파베이스용을 만든다)
+    capture_bridge: Callable | None = None  # 카탈로그 이름 -> Capture One 창구 (시험용)
 
 
 def _row(r: PhotoResult) -> dict:
@@ -162,6 +165,7 @@ STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "t
           "/sort_view.js": ("sort_view.js", "text/javascript"),
           "/migrate.js": ("migrate.js", "text/javascript"),
           "/cloud_view.js": ("cloud_view.js", "text/javascript"),
+          "/capture_view.js": ("capture_view.js", "text/javascript"),
           "/style.css": ("style.css", "text/css")}
 
 
@@ -392,6 +396,8 @@ class _Handler(BaseHTTPRequestHandler):
         if method == "GET" and rest == "/results":
             return self._send(HTTPStatus.OK, {"rows": [
                 {**_row(r), "size": file_size(job.folder / r.file)} for r in job.results]})
+        if rest == "/capture-one" and method == "POST":
+            return self._capture(job)
         if rest == "/marks" and method in ("GET", "POST"):
             return self._marks(job, method)
         m = re.fullmatch(r"/(thumb|photo)/(.+)", rest)
@@ -411,6 +417,16 @@ class _Handler(BaseHTTPRequestHandler):
         if method == "POST" and body is None:
             return
         status, payload = handle_cloud(self.state.cloud, method, path, body)
+        self._send(HTTPStatus(status), payload)
+
+    def _capture(self, job: ScanJob) -> None:
+        body = self._json_body()
+        if body is None:
+            return
+        bridge = self.state.cfg.capture_bridge
+        extra = {"make_bridge": bridge} if bridge else {}
+        status, payload = handle_capture(self.state.marks, job.folder, set(job.by_name()),
+                                         self.state.cfg.data_dir, body, **extra)
         self._send(HTTPStatus(status), payload)
 
     def _marks(self, job: ScanJob, method: str) -> None:

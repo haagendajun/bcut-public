@@ -6,6 +6,7 @@
   var SortView = window.BcutSortView;
   var Migrate = window.BcutMigrate;
   var Cloud = window.BcutCloud;
+  var Capture = window.BcutCapture;
   var root = document.getElementById('app');
   var TOKEN = root.dataset.token;
   var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {}, notice: null,
@@ -330,6 +331,7 @@
                  rerender: function () { render(); }});
 
   Cloud.init({el: el, api: api, rerender: function () { render(); }});
+  Capture.init({el: el, api: api, job: function () { return S.job; }, rerender: function () { render(); }});
 
   /* ---- 그리기 ---- */
   function render() {
@@ -342,6 +344,7 @@
     document.body.classList.toggle('lt-open', Review.isOpen());
     var m = SortView.render(); if (m) root.appendChild(m);
     var cm = Cloud.render(); if (cm) root.appendChild(cm);
+    var cp = Capture.render(); if (cp) root.appendChild(cp);
     window.scrollTo(0, scroll);
   }
   document.addEventListener('keydown', function (e) {
