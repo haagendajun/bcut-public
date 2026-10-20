@@ -5,7 +5,7 @@
   'use strict';
   var RL = root.BcutReviewLogic, L = root.BcutLogic;
   var ctx = null;   // {el, api, job, thumbUrl, photoUrl, rerender, onClose, openSort}
-  var R = null;     // 훑는 중일 때만 있는 상태: {rows, marks, index, seen, skip, full, msg, history, final}
+  var R = null;     // 훑는 중일 때만 있는 상태: {rows, marks, index, seen, skip, full, msg, history, final, faces, boxes}
   var RADIUS = 12;  // 필름스트립은 지금 사진 앞뒤 12장만 그린다
   var KEEP = 10;    // 큰 사진은 메모리에 최근 10장만 둔다
 
@@ -44,7 +44,7 @@
   function open(rows, markList) {
     var ordered = RL.order(rows), marks = RL.marksMap(markList);
     R = {rows: ordered, marks: marks, index: RL.resumeIndex(ordered, marks), seen: {}, skip: false, full: false,
-         msg: '', history: [], final: false};
+         msg: '', history: [], final: false, faces: {}, boxes: false};
     see(); ctx.rerender();
   }
   function exit(thenSort) {
@@ -101,6 +101,7 @@
     if (RL.KEY_TO_KIND[k]) { if (!e.repeat) mark(RL.KEY_TO_KIND[k]); return true; }   // 꾹 눌러도 한 장만
     if (k === 'd') { R.skip = !R.skip; R.msg = ''; ctx.rerender(); return true; }
     if (k === 'z') { R.full = !R.full; ctx.rerender(); return true; }
+    if (k === 'f') { R.boxes = !R.boxes; ctx.rerender(); return true; }
     return false;
   }
 
@@ -116,12 +117,59 @@
     var skip = ctx.el('button', null, '의심 컷 건너뛰기 ' + (R.skip ? '켜짐' : '꺼짐') + ' (D)');
     skip.setAttribute('aria-pressed', String(R.skip));
     skip.addEventListener('click', function () { R.skip = !R.skip; ctx.rerender(); });
+    var boxes = ctx.el('button', null, '얼굴 박스 ' + (R.boxes ? '켜짐' : '꺼짐') + ' (F)');
+    boxes.setAttribute('aria-pressed', String(R.boxes));
+    boxes.addEventListener('click', function () { R.boxes = !R.boxes; ctx.rerender(); });
     var end = ctx.el('button', null, '마치기 (Esc)');
     end.addEventListener('click', finish);
-    top.appendChild(skip); top.appendChild(end);
+    top.appendChild(skip); top.appendChild(boxes); top.appendChild(end);
     return top;
   }
-  function panel(row, current) {
+  /* 얼굴 정보는 크게 볼 때만 서버에서 받아 온다 (판정 때 저장하지 않은 값). 못 받아도 훑기는 계속된다 */
+  function loadFaces(row) {
+    if (R.faces[row.file]) return;
+    R.faces[row.file] = 'loading';
+    ctx.api('GET', '/api/jobs/' + ctx.job() + '/faces/' + encodeURIComponent(row.file)).then(function (info) {
+      if (R) R.faces[row.file] = info;
+    }).catch(function () { if (R) R.faces[row.file] = 'error'; }).then(function () {
+      if (R && !R.final && R.rows[R.index].file === row.file) ctx.rerender();
+    });
+  }
+  function eyeCanvas(img, info, face) {   // 눈 부분만 크게 그린다 (보이는 사진에서 잘라 내기, 디스크에 저장하지 않음)
+    var crop = RL.eyeCrop(face, info.w, info.h);
+    if (!crop) return null;
+    var cv = document.createElement('canvas'); cv.className = 'lt-eye';
+    cv.width = 240; cv.height = Math.round(240 * (crop.h * info.h) / (crop.w * info.w));
+    function draw() {
+      var nw = img.naturalWidth, nh = img.naturalHeight;
+      if (nw) cv.getContext('2d').drawImage(img, crop.x * nw, crop.y * nh, crop.w * nw, crop.h * nh, 0, 0, cv.width, cv.height);
+    }
+    if (img.complete && img.naturalWidth) draw(); else img.addEventListener('load', draw);
+    return cv;
+  }
+  function eyeSection(p, row, img) {
+    var info = R.faces[row.file];
+    if (info === 'loading' || !info) { p.appendChild(ctx.el('div', 'lt-muted', '눈 확대를 준비하고 있어요…')); return; }
+    if (info === 'error') { p.appendChild(ctx.el('div', 'lt-muted', '얼굴 정보를 불러오지 못했어요. 훑기는 계속할 수 있어요.')); return; }
+    var shown = info.faces.filter(function (f) { return f.eyes.length; }).slice(0, 3);
+    if (!shown.length) return;   // 얼굴이 없으면 이 칸은 비워 둔다
+    p.appendChild(ctx.el('div', 'lt-label', shown.length > 1 ? '눈 확대 (큰 얼굴 ' + shown.length + '명)' : '눈 확대'));
+    shown.forEach(function (f) { var cv = eyeCanvas(img, info, f); if (cv) p.appendChild(cv); });
+  }
+  /* 얼굴 박스: 보이는 사진 위에 겹쳐 그린다. 사진이 놓인 자리를 재서 맞춘다 */
+  function boxLayer(img, info) {
+    var layer = ctx.el('div', 'lt-boxes');
+    function place() { layer.style.cssText = 'left:' + img.offsetLeft + 'px;top:' + img.offsetTop + 'px;width:' + img.clientWidth + 'px;height:' + img.clientHeight + 'px'; }
+    function add(box, cls) {
+      var d = ctx.el('div', cls);
+      d.style.cssText = 'left:' + box[0] * 100 + '%;top:' + box[1] * 100 + '%;width:' + box[2] * 100 + '%;height:' + box[3] * 100 + '%';
+      layer.appendChild(d);
+    }
+    info.faces.forEach(function (f) { add(f.box, 'lt-face'); f.eyes.forEach(function (e) { add(e, 'lt-eyebox'); }); });
+    place(); img.addEventListener('load', place);
+    return layer;
+  }
+  function panel(row, current, img) {
     var p = ctx.el('div', 'lt-panel');
     p.appendChild(ctx.el('div', 'lt-label', '지금 표시'));
     p.appendChild(chip(current));
@@ -129,6 +177,7 @@
     var why = ctx.el('div', 'lt-why', L.explain(row, {})[0]);
     if (RL.isSuspect(row) && L.suspicion(row.confidence)) why.appendChild(ctx.el('small', null, '의심 정도 ' + L.suspicion(row.confidence)));
     p.appendChild(why);
+    eyeSection(p, row, img);
     p.appendChild(ctx.el('div', 'lt-muted', (R.index + 1) + ' / ' + R.rows.length));
     if (R.msg) p.appendChild(ctx.el('div', 'lt-msg', R.msg));
     return p;
@@ -157,6 +206,7 @@
     [next, after, prev].forEach(function (i) {
       if (i !== R.index) blobUrl(ctx.photoUrl(R.rows[i].file, 'view'), true).catch(function () {});
     });
+    if (next !== R.index) loadFaces(R.rows[next]);   // 다음 사진의 얼굴 정보도 미리 받아 둔다
   }
   /* 최종 확인: 담기 전에 장수를 한 번 더 본다. 표시 안 한 사진이 많아도 막지 않고 숫자만 알려 준다 */
   function renderFinal() {
@@ -194,9 +244,13 @@
     var stage = ctx.el('div', 'lt-stage' + (R.full ? ' full' : ''));
     var img = document.createElement('img'); img.alt = row.file;
     if (R.full) img.src = ctx.photoUrl(row.file, 'full'); else show(img, ctx.photoUrl(row.file, 'view'), true);
-    stage.appendChild(img); main.appendChild(stage); main.appendChild(panel(row, current));
+    stage.appendChild(img);
+    var info = R.faces[row.file];
+    if (R.boxes && info && info !== 'error' && info !== 'loading') stage.appendChild(boxLayer(img, info));
+    main.appendChild(stage); main.appendChild(panel(row, current, img));
     o.appendChild(main); o.appendChild(filmstrip());
-    o.appendChild(ctx.el('div', 'lt-keys', '← → 이동 · S 셀렉 · M 보류 · X 버릴 컷 (같은 키를 다시 누르면 해제) · ⌘Z 실행 취소 · D 의심 컷 건너뛰기 · Z 100% 확대 · Esc 마치기'));
+    o.appendChild(ctx.el('div', 'lt-keys', '← → 이동 · S 셀렉 · M 보류 · X 버릴 컷 (같은 키를 다시 누르면 해제) · ⌘Z 실행 취소 · D 의심 컷 건너뛰기 · F 얼굴 박스 · Z 100% 확대 · Esc 마치기'));
+    loadFaces(row);
     prefetch();
     return o;
   }

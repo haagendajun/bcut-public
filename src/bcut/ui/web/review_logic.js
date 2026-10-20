@@ -46,6 +46,20 @@
     return [Math.max(0, index - radius), Math.min(total, index + radius + 1)];
   }
 
+  /* 눈 확대: 얼굴의 눈 상자들을 합쳐 양쪽 눈이 들어오는 가로로 긴 영역을 만든다 (좌표는 사진 크기에 대한 비율).
+     w, h는 사진 픽셀 크기. 눈 위치가 없으면 null. 가로:세로가 1:0.45가 되게 픽셀 비율을 맞추고 사진 안으로 밀어 넣는다 */
+  function eyeCrop(face, w, h) {
+    if (!face || !face.eyes || !face.eyes.length) return null;
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    face.eyes.forEach(function (b) {
+      x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[0] + b[2]); y1 = Math.max(y1, b[1] + b[3]);
+    });
+    var cw = Math.min(1, Math.max((x1 - x0) * 1.5, 0.03));
+    var ch = Math.min(1, cw * 0.45 * (w / h));
+    var x = Math.min(Math.max((x0 + x1) / 2 - cw / 2, 0), 1 - cw), y = Math.min(Math.max((y0 + y1) / 2 - ch / 2, 0), 1 - ch);
+    return {x: x, y: y, w: cw, h: ch};
+  }
+
   /* 실행 취소 기록: 표시를 달 때마다 {key, file, before, after, from}을 쌓고, 최근 것부터 되돌린다 */
   var HISTORY_LIMIT = 200;
   function recordChange(history, change) {
@@ -56,7 +70,7 @@
   function dropLast(history) { return history.slice(0, -1); }
   function dropChange(history, change) { return history.filter(function (h) { return h !== change; }); }
 
-  var api = {MARKS: MARKS, recordChange: recordChange, lastChange: lastChange, dropLast: dropLast,
+  var api = {MARKS: MARKS, eyeCrop: eyeCrop, recordChange: recordChange, lastChange: lastChange, dropLast: dropLast,
              dropChange: dropChange, KEY_TO_KIND: KEY_TO_KIND, markKey: markKey, isSuspect: isSuspect, order: order,
              marksMap: marksMap, nextMark: nextMark, move: move, resumeIndex: resumeIndex, counts: counts,
              windowRange: windowRange};

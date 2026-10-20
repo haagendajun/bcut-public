@@ -114,3 +114,18 @@ JSON.stringify({todo: BcutMigrate.todo(['A','B','Z'], rows, marks), none: BcutMi
     out = subprocess.run(["osascript", "-l", "JavaScript", str(f)], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
     assert json.loads(out.stdout.strip()) == {"todo": ["A"], "none": [], "all": ["A", "B", "C"]}
+
+
+def test_eye_crop_covers_both_eyes_keeps_the_shape_and_stays_inside_the_picture(tmp_path):
+    r = run_js("""
+var R = BcutReviewLogic;
+var face = {eyes: [[0.40, 0.30, 0.04, 0.02], [0.50, 0.30, 0.04, 0.02]]};   // 양쪽 눈
+var c = R.eyeCrop(face, 2000, 1000);
+var edge = R.eyeCrop({eyes: [[0.0, 0.0, 0.02, 0.01]]}, 2000, 1000);          // 사진 모서리의 아주 작은 눈
+var big = R.eyeCrop({eyes: [[0.0, 0.0, 1.0, 1.0]]}, 1000, 2000);              // 눈 상자가 사진만 한 이상한 값
+JSON.stringify({
+  both: c.x <= 0.40 && c.x + c.w >= 0.54, shape: Math.round((c.h * 1000) / (c.w * 2000) * 100) / 100,
+  inside: [c, edge, big].every(function (k) { return k.x >= 0 && k.y >= 0 && k.x + k.w <= 1.0001 && k.y + k.h <= 1.0001; }),
+  minWidth: edge.w >= 0.03, none: [R.eyeCrop(null, 10, 10), R.eyeCrop({eyes: []}, 10, 10), R.eyeCrop({}, 10, 10)]});
+""", tmp_path)
+    assert r == {"both": True, "shape": 0.45, "inside": True, "minWidth": True, "none": [None, None, None]}

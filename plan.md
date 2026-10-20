@@ -81,7 +81,7 @@
 |---|---|
 | `GET /api/jobs/<job>/marks` | 이 행사의 현재 표시 목록 `{marks:[{file,size,kind}]}` |
 | `POST /api/jobs/<job>/marks` `{file, kind \| null}` | 표시 달기/해제. 앞 표시는 자동 취소. 취소된 이력은 파일에 남음 (서버가 PUT을 허용하지 않아 POST로 함) |
-| `GET /api/jobs/<job>/faces/<파일>` | 얼굴 박스·눈 위치 `{w,h,faces:[{bbox,eyes}]}`. 기존 얼굴 인식을 불러서 계산 (FR-24) |
+| `GET /api/jobs/<job>/faces/<파일>` | 얼굴 박스·눈 위치 `{w,h,faces:[{box,area,eyes}]}` (사진 크기에 대한 비율, 원점 왼쪽 위). 기존 얼굴 인식을 불러서 계산하고 한 번만 계산해 기억 (FR-24, **3단계 구현 완료**) |
 | `POST /api/jobs/<job>/review` `{started_at, ended_at, seen, pick, maybe, discard}` | 훑기 기록 저장 (FR-26) |
 | `POST /api/jobs/<job>/sort` (기존) | 담기에 현재 표시를 반영. 기존 `rescue` 입력은 제거하고 표시로 대체 |
 

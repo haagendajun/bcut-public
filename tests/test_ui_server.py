@@ -259,6 +259,58 @@ def test_sort_ignores_marks_sent_by_the_screen_and_other_events(world):
     assert plan["marked"] == {"pick": 0, "maybe": 0, "discard": 0}  # 저장된 표시만 쓴다
 
 
+def test_faces_endpoint_computes_once_and_guards_names(tmp_path):
+    ev = tmp_path / "행사"
+    ev.mkdir()
+    (ev / "A.CR3").write_bytes(b"a" * 10)
+    calls = []
+
+    def fake_faces(path, flip):
+        calls.append((path.name, flip))
+        return {"w": 100, "h": 50, "faces": [{"box": [0.1, 0.1, 0.2, 0.2], "area": 0.04, "eyes": []}]}
+
+    cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "d", faces=fake_faces,
+                       scan=lambda folder, progress=None, **kw: [result("A.CR3", "candidate")],
+                       orientation=lambda p: 6)
+    server = make_server(cfg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        job = start_job(server, ev)
+        status, _, raw = call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert status == 200 and jbody(raw)["faces"][0]["area"] == 0.04
+        call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert calls == [("A.CR3", 6)]  # 두 번 불러도 계산은 한 번, 회전 값을 넘긴다
+        assert call(server, "GET", f"/api/jobs/{job}/faces/A.CR3", token=False)[0] == 401
+        assert call(server, "GET", f"/api/jobs/{job}/faces/../A.CR3")[0] == 404  # 경로 조작
+        assert call(server, "GET", f"/api/jobs/{job}/faces/NONE.CR3")[0] == 404
+        assert call(server, "POST", f"/api/jobs/{job}/faces/A.CR3", {})[0] == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_faces_failure_is_reported_without_stopping_the_server(tmp_path):
+    ev = tmp_path / "행사"
+    ev.mkdir()
+    (ev / "A.CR3").write_bytes(b"a")
+
+    def boom(path, flip):
+        raise RuntimeError("Vision 요청 실패")
+
+    cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "d", faces=boom, orientation=lambda p: 0,
+                       scan=lambda folder, progress=None, **kw: [result("A.CR3")])
+    server = make_server(cfg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        job = start_job(server, ev)
+        status, _, raw = call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert status == 500 and "얼굴 정보를 읽을 수 없다" in jbody(raw)["error"]
+        assert call(server, "GET", "/api/health")[0] == 200  # 훑기는 계속된다
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_marks_are_not_written_into_the_event_folder(world):
     server, ev, tmp, _ = world
     job = start_job(server, ev)
