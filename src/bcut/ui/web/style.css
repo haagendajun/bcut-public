@@ -205,3 +205,5 @@ body.lt-open{overflow:hidden}
 .lt-eyebox{position:absolute;border:1px solid #9cc8ff;border-radius:2px}
 .lt-eye{width:240px;max-width:100%;border-radius:8px;background:#000;border:1px solid #34343b}
 
+.cloud-chip{font-size:13px;white-space:nowrap}
+.panel input[type=password]{background:var(--surface);border:0;box-shadow:inset 0 0 0 1px var(--line);border-radius:12px;padding:9px 12px;font-size:14px}

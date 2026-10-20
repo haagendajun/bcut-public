@@ -22,6 +22,13 @@ SERVER_FILE = SRC / "ui" / "server.py"
 SERVER_ALLOWED = {"http"}
 
 
+# 올리기 통신 파일(ADR-0009)만 예외다 (사용자 승인 2026-10-20 "추천대로").
+# 이 파일은 `urllib`만 쓸 수 있다. 다른 파일은 네트워크 모듈을 쓰지 못하고,
+# 이 파일에서도 socket·ssl·http는 금지다.
+CLOUD_FILE = SRC / "ui" / "cloud.py"
+CLOUD_ALLOWED = {"urllib"}
+
+
 def _sources():
     return sorted(SRC.rglob("*.py"))
 
@@ -40,7 +47,7 @@ def test_no_network_imports():
                 names = [a.name.split(".")[0] for a in node.names]
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module.split(".")[0]]
-            allowed = SERVER_ALLOWED if path == SERVER_FILE else set()
+            allowed = {SERVER_FILE: SERVER_ALLOWED, CLOUD_FILE: CLOUD_ALLOWED}.get(path, set())
             offenders += [f"{path.name}: {n}" for n in names
                           if n in BANNED_IMPORTS and n not in allowed]
     assert not offenders, f"네트워크 모듈 import 금지(C1): {offenders}"
@@ -90,3 +97,20 @@ def test_server_has_no_wildcard_or_external_bind_and_no_client_code():
     for bad in ("0.0.0.0", '"::"', "'::'", "create_connection", "urlopen", "http.client",
                 "HTTPConnection", "HTTPSConnection", ".connect("):
         assert bad not in text, f"서버 파일에 금지된 표현: {bad}"
+
+
+def test_only_cloud_file_uses_urllib():
+    users = []
+    for path in _sources():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            mods = [a.name for a in node.names] if isinstance(node, ast.Import) else (
+                [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            if any(m.split(".")[0] == "urllib" for m in mods) and path != CLOUD_FILE:
+                users.append(path.name)
+    assert not users, f"urllib는 ui/cloud.py에서만 쓴다: {users}"
+
+
+def test_cloud_file_has_no_secret_keys():
+    text = CLOUD_FILE.read_text(encoding="utf-8")
+    assert "sb_secret_" not in text and "service_role" not in text
+    assert "sb_publishable_" in text  # 공개용 열쇠만

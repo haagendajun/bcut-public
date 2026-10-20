@@ -43,7 +43,9 @@
     var seen = Object.keys(R.seen).length;
     if (!seen) return;
     var body = RL.sessionRecord(R.id, R.startedAt, Date.now(), seen, RL.counts(R.rows, R.marks));
-    ctx.api('POST', '/api/jobs/' + ctx.job() + '/review', body).catch(function () {});
+    ctx.api('POST', '/api/jobs/' + ctx.job() + '/review', body)
+      .then(function () { document.dispatchEvent(new CustomEvent('bcut-review-recorded')); })
+      .catch(function () {});
   }
 
   function init(c) { ctx = c; }

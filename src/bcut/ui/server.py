@@ -29,6 +29,7 @@ API (모두 JSON, 토큰 필요):
   GET  /api/jobs/<job>/marks            -> {marks: [{file, size, kind}], broken}  (셀렉·보류·버릴컷)
   POST /api/jobs/<job>/marks {file, kind|null} -> {file, size, kind}  (표시, 앞 표시는 취소)
   GET  /api/jobs/<job>/faces/<파일>      -> {w, h, faces: [{box, area, eyes}]}  (얼굴·눈 위치)
+  GET  /api/cloud/status · POST /api/cloud/consent|login|logout|sync -> 올리기 (cloud_service)
   POST /api/jobs/<job>/review {id, started_at, ended_at, seen, pick, maybe, discard} -> 훑기 기록
 """
 
@@ -49,6 +50,10 @@ from bcut import __version__
 from bcut.organize import SortError, run_sort
 from bcut.report.csv_report import write_csv
 from bcut.scan import PhotoResult, count_by_status, list_photos, scan_folder
+from bcut.ui.cloud import SupabaseClient
+from bcut.ui.cloud_service import CloudService
+from bcut.ui.cloud_service import handle as handle_cloud
+from bcut.ui.cloud_state import MacKeychain
 from bcut.ui.faces import face_info
 from bcut.ui.marks import MarkStore, file_size, list_marks, post_mark
 from bcut.ui.photos import (  # noqa: F401  rotate_*는 기존 이름으로도 쓰이도록 다시 내보낸다
@@ -117,6 +122,7 @@ class ServerConfig:
     faces: Callable[[Path, int], dict] | None = None  # (경로, 회전) -> 얼굴 정보. 없으면 인식
     reveal: Callable[[Path], None] | None = None  # Finder에서 열기 (없으면 `open`)
     workers: int | None = None
+    cloud: CloudService | None = None  # 올리기 서비스 (없으면 실제 슈파베이스용을 만든다)
 
 
 def _row(r: PhotoResult) -> dict:
@@ -154,7 +160,9 @@ STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "t
           "/review_logic.js": ("review_logic.js", "text/javascript"),
           "/review.js": ("review.js", "text/javascript"),
           "/sort_view.js": ("sort_view.js", "text/javascript"),
-          "/migrate.js": ("migrate.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
+          "/migrate.js": ("migrate.js", "text/javascript"),
+          "/cloud_view.js": ("cloud_view.js", "text/javascript"),
+          "/style.css": ("style.css", "text/css")}
 
 
 class AppState:
@@ -168,6 +176,7 @@ class AppState:
         self.marks = MarkStore(cfg.data_dir / "events")  # 셀렉·보류·버릴 컷 표시 (행사 단위)
         self.faces_lock = threading.Lock()  # 얼굴 인식은 한 번에 하나씩
         self.reviews = ReviewStore(cfg.data_dir / "events")  # 훑기 기록 (행사 단위)
+        self.cloud = cfg.cloud or CloudService(cfg.data_dir, SupabaseClient(), MacKeychain())
 
     def start_scan(self, folder: Path) -> ScanJob:
         job_id = secrets.token_hex(6)
@@ -324,6 +333,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.OK, {"ok": True, "version": __version__})
         if method == "POST" and path == "/api/scan":
             return self._scan()
+        if path.startswith("/api/cloud/"):
+            return self._cloud(method, path)
         m = re.fullmatch(r"/api/jobs/([0-9a-f]{12})(/.*)?", path)
         if m:
             job = self.state.job(m.group(1))
@@ -394,6 +405,13 @@ class _Handler(BaseHTTPRequestHandler):
         if method == "POST" and rest == "/sort":
             return self._sort(job)
         self._send(HTTPStatus.NOT_FOUND, {"error": "없는 주소"})
+
+    def _cloud(self, method: str, path: str) -> None:
+        body = self._json_body() if method == "POST" else None
+        if method == "POST" and body is None:
+            return
+        status, payload = handle_cloud(self.state.cloud, method, path, body)
+        self._send(HTTPStatus(status), payload)
 
     def _marks(self, job: ScanJob, method: str) -> None:
         names = set(job.by_name())

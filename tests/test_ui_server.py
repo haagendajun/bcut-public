@@ -10,6 +10,9 @@ from PIL import Image
 
 from bcut.scan import PhotoResult
 from bcut.ui import server as srv
+from bcut.ui.cloud import SupabaseClient
+from bcut.ui.cloud_service import CloudService
+from bcut.ui.cloud_state import MemoryVault
 from bcut.ui.server import ServerConfig, make_server, split_target, unquote
 
 TOKEN = "t" * 32
@@ -47,7 +50,8 @@ def world(tmp_path):
         return out
 
     cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "data", scan=fake_scan,
-                       read_photo=lambda p, size: jpeg((1, 2, 3)) if size == "view" else b"FULL")
+                       read_photo=lambda p, size: jpeg((1, 2, 3)) if size == "view" else b"FULL",
+                       cloud=CloudService(tmp_path / "data", SupabaseClient(), MemoryVault()))
     server = make_server(cfg)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield server, ev, tmp_path, calls
@@ -486,7 +490,8 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     assert TOKEN in html and "__TOKEN__" not in html
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
                         ("/review.js", "javascript"), ("/sort_view.js", "javascript"),
-                        ("/migrate.js", "javascript"), ("/style.css", "css")):
+                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"),
+                        ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
         assert status == 200 and ctype in headers["Content-Type"] and len(raw) > 100
@@ -498,7 +503,7 @@ def test_web_files_follow_the_security_rules():
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
     for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
-              "style.css"):
+              "cloud_view.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
@@ -507,7 +512,8 @@ def test_web_files_follow_the_security_rules():
 
 def test_screen_files_avoid_retired_and_hard_words():
     web = Path(srv.__file__).parent / "web"
-    for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js"):
+    for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js",
+              "cloud_view.js"):
         text = (web / f).read_text(encoding="utf-8")
         for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
             assert word not in text, (f, word)
@@ -626,3 +632,25 @@ def test_thumbnail_is_rotated_by_orientation_and_cached(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# ---- 클라우드 올리기 길 (spec FR-29~33) -------------------------------------------------------
+
+def test_cloud_status_and_no_request_without_consent(world):
+    server, *_ = world
+    st, _, raw = call(server, "GET", "/api/cloud/status")
+    assert st == 200 and jbody(raw)["state"] == "need_consent" and jbody(raw)["pending"] == 0
+    st, _, raw = call(server, "POST", "/api/cloud/sync", {})
+    assert st == 200 and jbody(raw)["state"] == "need_consent"  # 동의 전에는 요청 없이 상태만
+    st, _, raw = call(server, "POST", "/api/cloud/login", {"email": "a@b.c", "password": "x"})
+    assert st == 403 and jbody(raw)["kind"] == "consent"
+
+
+def test_cloud_consent_then_login_needed_and_token_required(world):
+    server, *_ = world
+    assert call(server, "POST", "/api/cloud/consent", {})[0] == 200
+    st, _, raw = call(server, "GET", "/api/cloud/status")
+    assert jbody(raw)["state"] == "need_login" and jbody(raw)["consented"]
+    assert call(server, "GET", "/api/cloud/status", token=False)[0] == 401
+    assert call(server, "POST", "/api/cloud/login", {"email": ""})[0] == 400
+    assert call(server, "POST", "/api/cloud/nope", {})[0] == 404

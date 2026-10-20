@@ -32,6 +32,18 @@ def event_key(folder: Path) -> str:
     return (safe or "event")[:80]
 
 
+def note_event(root: Path, folder: Path) -> None:
+    """행사의 원래 이름(폴더 이름)을 한 번 적어 둔다. 올릴 때 행사 이름으로 쓴다."""
+    path = root / event_key(folder) / "event.json"
+    if path.exists():
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"name": folder.name}, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass  # 이름을 못 적어도 표시 저장은 계속한다 (폴더 키로 대신 올린다)
+
+
 def file_size(path: Path) -> int | None:
     try:
         return path.stat().st_size
@@ -129,6 +141,7 @@ def post_mark(store: MarkStore, folder: Path, names: set[str], body: dict) -> tu
     if size is None:
         return 404, {"error": "사진 파일을 찾을 수 없다"}
     try:
+        note_event(store.root, folder)
         now_kind = store.set(event_key(folder), file, size, kind)
     except OSError as exc:
         return 500, {"error": f"표시를 저장하지 못했다: {type(exc).__name__}"}

@@ -18,7 +18,7 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from bcut.ui.marks import event_key
+from bcut.ui.marks import event_key, note_event
 
 _ID = re.compile(r"[0-9A-Za-z_-]{8,64}")
 _COUNTS = (("seen", "photos_seen"), ("pick", "pick_count"), ("maybe", "maybe_count"),
@@ -93,6 +93,7 @@ def post_review(store: ReviewStore, folder: Path, scan_ref: str, body: dict,
              "ended_at": ended.isoformat(timespec="seconds"), **counts,
              "tool_version": tool_version}
     try:
+        note_event(store.root, folder)
         added = store.add(event_key(folder), entry)
     except OSError as exc:
         return 500, {"error": f"훑기 기록을 저장하지 못했다: {type(exc).__name__}"}

@@ -5,6 +5,7 @@
   var Review = window.BcutReview;
   var SortView = window.BcutSortView;
   var Migrate = window.BcutMigrate;
+  var Cloud = window.BcutCloud;
   var root = document.getElementById('app');
   var TOKEN = root.dataset.token;
   var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {}, notice: null,
@@ -28,6 +29,9 @@
     ['디스크 여유 공간이 부족', '저장 공간이 모자라요. 같은 디스크 안의 폴더를 고르면 공간을 거의 쓰지 않아요.'],
     ['토큰이 필요', '앱과의 연결이 끊겼어요. 앱을 껐다가 다시 켜 주세요.'],
     ['허용되지 않은', '앱과의 연결이 올바르지 않아요. 앱을 껐다가 다시 켜 주세요.'],
+    ['이메일 또는 비밀번호', '이메일 또는 비밀번호가 맞지 않거나 로그인이 만료됐어요. 다시 입력해 주세요.'],
+    ['먼저 올리기 안내', '먼저 안내에 동의해 주세요.'],
+    ['인터넷에 연결하지', '인터넷에 연결되지 않았어요. 연결되면 다시 올라가요.'],
     ['없는 작업', '이전 검사 결과를 찾을 수 없어요. 폴더를 다시 열어 주세요.']
   ];
   function friendly(msg) {
@@ -65,6 +69,7 @@
     hero.appendChild(el('h1', null, 'bcut'));
     hero.appendChild(el('p', 'lead', '행사 사진에서 눈을 감았거나 흔들린 사진처럼 버릴 만한 컷을 찾아서, 폴더로 나누어 줘요.'));
     hero.appendChild(el('div', 'trust', '사진은 이 컴퓨터 밖으로 나가지 않아요 · 원본은 보기만 하고 지우거나 옮기지 않아요'));
+    hero.appendChild(Cloud.chip());
     var drop = el('div', 'drop');
     drop.appendChild(el('h2', null, '사진이 들어 있는 폴더를 여기에 끌어다 놓으세요'));
     drop.appendChild(el('p', null, '카메라 원본(RAW, CR3) 사진이 있는 폴더'));
@@ -276,7 +281,7 @@
     sortBtn.addEventListener('click', function () { SortView.open(); });
     var reviewBtn = el('button', 'primary', S.markCount ? '이어서 훑기' : '훑기 시작');
     reviewBtn.addEventListener('click', startReview);
-    act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
+    act.appendChild(Cloud.chip()); act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
     w.appendChild(bar);
     if (S.notice) w.appendChild(el('div', 'notice', S.notice));
     w.appendChild(overview(c));
@@ -324,6 +329,8 @@
   SortView.init({el: el, api: api, job: function () { return S.job; }, chooseFolder: chooseFolder, friendly: friendly,
                  rerender: function () { render(); }});
 
+  Cloud.init({el: el, api: api, rerender: function () { render(); }});
+
   /* ---- 그리기 ---- */
   function render() {
     var scroll = window.scrollY;
@@ -334,6 +341,7 @@
     var rv = Review.render(); if (rv) root.appendChild(rv);
     document.body.classList.toggle('lt-open', Review.isOpen());
     var m = SortView.render(); if (m) root.appendChild(m);
+    var cm = Cloud.render(); if (cm) root.appendChild(cm);
     window.scrollTo(0, scroll);
   }
   document.addEventListener('keydown', function (e) {
