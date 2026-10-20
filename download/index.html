@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bcut 다운로드</title>
+<style>
+:root{--bg:#f5f5f7;--card:#fff;--tx:#1d1d1f;--mut:#6e6e73;--line:rgba(0,0,0,.1);--acc:#0a66d6;--on:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#111113;--card:#1c1c1f;--tx:#f2f2f4;--mut:#a1a1a8;--line:rgba(255,255,255,.12);--acc:#4c9bff;--on:#06101f}}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.65 -apple-system,system-ui,"Apple SD Gothic Neo",sans-serif}
+main{max-width:640px;margin:0 auto;padding:40px 20px 64px}
+h1{font-size:34px;margin:0 0 6px}.lead{color:var(--mut);margin:0 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px;margin:16px 0}
+.btn{display:inline-block;background:var(--acc);color:var(--on);text-decoration:none;font-weight:700;padding:13px 22px;border-radius:999px}
+.btn:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+h2{font-size:19px;margin:0 0 10px}ol,ul{margin:6px 0;padding-left:22px}li{margin:6px 0}
+.mut{color:var(--mut);font-size:14px}code{font:13px ui-monospace,Menlo,monospace;word-break:break-all}
+</style>
+</head>
+<body><main>
+<h1>bcut</h1>
+<p class="lead">행사 사진에서 눈을 감았거나 흔들린 컷을 찾고, 좋은 컷을 골라 폴더로 나누어 주는 맥 앱이에요.</p>
+
+<div class="card">
+  <a class="btn" href="https://github.com/haagendajun/bcut-releases/releases/download/v0.1.0/bcut-0.1.0-mac-arm64.zip">⬇ 맥용 다운로드 (v0.1.0)</a>
+  <p class="mut">Apple 칩(M1 이후) 맥 전용 · 약 160MB · 압축 파일(zip)</p>
+  <p class="mut">파일 확인값(SHA-256): <code>d18a0dc1aed94fe1350e81acb73d20e646de5d8a84f3f6f9a51dd9289ddfeafc</code></p>
+</div>
+
+<div class="card">
+  <h2>설치하는 방법</h2>
+  <ol>
+    <li>내려받은 zip 파일을 더블클릭해서 압축을 풀어요. <b>bcut</b> 앱이 나와요.</li>
+    <li>bcut을 <b>응용 프로그램</b> 폴더로 끌어다 놓아요.</li>
+    <li>처음 한 번만: bcut을 <b>우클릭 → 열기</b>를 누르고, 나오는 창에서 다시 <b>열기</b>를 눌러요.</li>
+  </ol>
+  <p class="mut">3번이 필요한 이유: 이 앱은 애플의 정식 서명을 받지 않아서, 맥이 "확인되지 않은 개발자"라고 알려 줘요. 위험하다는 뜻이 아니라 서명이 없다는 뜻이에요.</p>
+</div>
+
+<div class="card">
+  <h2>알아 두세요</h2>
+  <ul>
+    <li><b>사진은 내 컴퓨터 밖으로 나가지 않아요.</b> 모든 검사는 내 맥 안에서 해요.</li>
+    <li>원본 사진은 보기만 하고, 지우거나 옮기지 않아요. 나누어 담을 때는 새 폴더에 사본을 만들어요.</li>
+    <li>인터넷은 선택 기능(표시 기록을 내 계정에 올리기)을 켰을 때만 써요. 켜기 전에 안내가 나와요.</li>
+    <li>카메라 원본(RAW) 중 Canon CR3 사진으로 시험했어요. 다른 형식은 확인하지 못했어요.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>열리지 않을 때</h2>
+  <ul>
+    <li>"손상되었기 때문에 열 수 없습니다"가 나오면: 터미널에서 <code>xattr -cr /Applications/bcut.app</code> 을 한 번 실행하고 다시 열어요.</li>
+    <li>Intel 맥에서는 열리지 않아요.</li>
+  </ul>
+</div>
+<p class="mut">이 앱은 개인이 만든 프로그램이라 보증이 없어요. 문제가 있으면 만든 사람에게 알려 주세요.</p>
+</main></body></html>

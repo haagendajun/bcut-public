@@ -23,7 +23,9 @@ if (!app.requestSingleInstanceLock()) {
 function loadConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')); } catch (_) {}
-  return { python: process.env.BCUT_PYTHON || cfg.python };
+  // 나눠 주기용 빌드는 앱 안의 파이썬을 상대 경로로 가리킨다 (다른 맥에서도 열리게)
+  const rel = cfg.python && !path.isAbsolute(cfg.python) ? path.resolve(__dirname, cfg.python) : cfg.python;
+  return { python: process.env.BCUT_PYTHON || rel };
 }
 
 // 같은 포트를 쓰면 "살리기" 기억(브라우저 저장소는 주소+포트별)이 앱을 껐다 켜도 남는다. 사용 중이면 빈 포트로 대체.
@@ -62,6 +64,9 @@ async function startServer() {
   const dataDir = path.join(app.getPath('userData'), 'data');
   const code = `import sys; from bcut.cli import main; sys.exit(main(['serve','--port','${port}','--data-dir',${JSON.stringify(dataDir)}]))`;
   const env = { ...process.env, BCUT_TOKEN: token, PYTHONUNBUFFERED: '1' };
+  // 앱에 담은 인증서 목록 (Homebrew가 없는 맥에서도 슈파베이스 https 확인이 되게)
+  const certs = path.join(__dirname, 'cacert.pem');
+  if (fs.existsSync(certs)) env.SSL_CERT_FILE = certs;
   server = spawn(cfg.python, ['-B', '-c', code], { env, cwd: app.getPath('userData') });
   const keep = (b) => { serverLog = (serverLog + b.toString()).slice(-4000); };
   server.stdout.on('data', keep);

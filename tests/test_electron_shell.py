@@ -72,6 +72,16 @@ def test_build_script_rules():
     assert "SHASUMS256" in BUILD  # 내려받을 때는 체크섬 확인
 
 
+def test_dist_build_script_rules():
+    text = (EL / "build_dist.sh").read_text(encoding="utf-8")
+    assert text.startswith("#!/bin/bash") and "set -euo pipefail" in text
+    assert subprocess.run(["bash", "-n", str(EL / "build_dist.sh")]).returncode == 0
+    assert '"python": "../py/bin/python3.13"' in text  # 앱 안의 파이썬을 상대 경로로 (다른 맥에서도)
+    assert "Info.plist" in text and "cacert.pem" in text
+    assert "~/Applications" not in text.split("\n", 3)[3] or "건드리지 않는다" in text  # 내 앱은 안 건드림
+    assert "path.isAbsolute(cfg.python)" in MAIN and "SSL_CERT_FILE" in MAIN
+
+
 @pytest.mark.skipif(shutil.which("osascript") is None, reason="osascript 없음")
 @pytest.mark.parametrize("name", ["main.js", "preload.js"])
 def test_scripts_parse(name, tmp_path):
