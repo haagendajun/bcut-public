@@ -143,6 +143,15 @@ def test_set_rating_and_color_pass_value_then_refs():
     assert b.set_rating(3, []) == 0 and len(calls) == 2  # 비어 있으면 호출하지 않는다
 
 
+def test_read_scripts_use_the_fast_path_with_safe_fallback():
+    for script in (capture_one.LIST_SCRIPT, capture_one.SESSION_LIST_SCRIPT):
+        assert "on readFast" in script and "on readSlow" in script
+        assert "path of every image of c" in script       # 한꺼번에 읽는 빠른 길
+        assert "okFirst" in script and "okLast" in script  # 순서가 어긋났는지 확인
+        assert "my readSlow(c)" in script                  # 어긋나면 옛 방식
+        assert "set fast to true" in script
+
+
 def test_bridge_wrong_catalog_error_propagates():
     def run(script, args, **kw):
         raise AppleScriptError("wrong catalog: 실제작업 (expected bcut-test)")
