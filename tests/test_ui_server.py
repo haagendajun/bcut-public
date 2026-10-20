@@ -311,6 +311,22 @@ def test_faces_failure_is_reported_without_stopping_the_server(tmp_path):
         server.server_close()
 
 
+def test_review_record_is_saved_per_event_and_guards_input(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    body = {"id": "rev-server-0001", "started_at": "2026-10-20T10:00:00+09:00",
+            "ended_at": "2026-10-20T10:02:00+09:00", "seen": 60, "pick": 7, "maybe": 1, "discard": 2}
+    status, _, raw = call(server, "POST", f"/api/jobs/{job}/review", body)
+    assert status == 200 and jbody(raw)["seconds_per_photo"] == 2.0
+    call(server, "POST", f"/api/jobs/{job}/review", body)  # 다시 보내도 한 줄만
+    line = (tmp / "data" / "events" / "행사" / "reviews.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(line) == 1 and json.loads(line[0])["scan_ref"] == job and json.loads(line[0])["photos_seen"] == 60
+    assert call(server, "POST", f"/api/jobs/{job}/review", {**body, "id": "rev-server-0002", "seen": -5})[0] == 400
+    assert call(server, "POST", f"/api/jobs/{job}/review", body, token=False)[0] == 401
+    assert call(server, "GET", f"/api/jobs/{job}/review")[0] == 404
+    assert sorted(p.name for p in ev.iterdir()) == ["A.CR3", "B.CR3", "C.CR3"]  # 원본 폴더에는 쓰지 않는다
+
+
 def test_marks_are_not_written_into_the_event_folder(world):
     server, ev, tmp, _ = world
     job = start_job(server, ev)

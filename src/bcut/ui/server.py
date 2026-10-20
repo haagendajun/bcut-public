@@ -29,6 +29,7 @@ API (모두 JSON, 토큰 필요):
   GET  /api/jobs/<job>/marks            -> {marks: [{file, size, kind}], broken}  (셀렉·보류·버릴컷)
   POST /api/jobs/<job>/marks {file, kind|null} -> {file, size, kind}  (표시, 앞 표시는 취소)
   GET  /api/jobs/<job>/faces/<파일>      -> {w, h, faces: [{box, area, eyes}]}  (얼굴·눈 위치)
+  POST /api/jobs/<job>/review {id, started_at, ended_at, seen, pick, maybe, discard} -> 훑기 기록
 """
 
 from __future__ import annotations
@@ -56,6 +57,7 @@ from bcut.ui.photos import (  # noqa: F401  rotate_*는 기존 이름으로도 �
     rotate_image,
     rotate_jpeg,
 )
+from bcut.ui.reviews import ReviewStore, post_review
 
 LOOPBACK = "127.0.0.1"
 MAX_BODY = 1_000_000  # 요청 본문 상한 (바이트)
@@ -165,6 +167,7 @@ class AppState:
         self.lock = threading.Lock()
         self.marks = MarkStore(cfg.data_dir / "events")  # 셀렉·보류·버릴 컷 표시 (행사 단위)
         self.faces_lock = threading.Lock()  # 얼굴 인식은 한 번에 하나씩
+        self.reviews = ReviewStore(cfg.data_dir / "events")  # 훑기 기록 (행사 단위)
 
     def start_scan(self, folder: Path) -> ScanJob:
         job_id = secrets.token_hex(6)
@@ -386,6 +389,8 @@ class _Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/faces/(.+)", rest)
         if method == "GET" and m:
             return self._faces(job, m.group(1))
+        if method == "POST" and rest == "/review":
+            return self._review(job)
         if method == "POST" and rest == "/sort":
             return self._sort(job)
         self._send(HTTPStatus.NOT_FOUND, {"error": "없는 주소"})
@@ -397,6 +402,12 @@ class _Handler(BaseHTTPRequestHandler):
         body = self._json_body()
         if body is not None:
             status, payload = post_mark(self.state.marks, job.folder, names, body)
+            self._send(HTTPStatus(status), payload)
+
+    def _review(self, job: ScanJob) -> None:
+        body = self._json_body()
+        if body is not None:
+            status, payload = post_review(self.state.reviews, job.folder, job.id, body, __version__)
             self._send(HTTPStatus(status), payload)
 
     def _faces(self, job: ScanJob, name: str) -> None:

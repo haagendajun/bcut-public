@@ -82,7 +82,7 @@
 | `GET /api/jobs/<job>/marks` | 이 행사의 현재 표시 목록 `{marks:[{file,size,kind}]}` |
 | `POST /api/jobs/<job>/marks` `{file, kind \| null}` | 표시 달기/해제. 앞 표시는 자동 취소. 취소된 이력은 파일에 남음 (서버가 PUT을 허용하지 않아 POST로 함) |
 | `GET /api/jobs/<job>/faces/<파일>` | 얼굴 박스·눈 위치 `{w,h,faces:[{box,area,eyes}]}` (사진 크기에 대한 비율, 원점 왼쪽 위). 기존 얼굴 인식을 불러서 계산하고 한 번만 계산해 기억 (FR-24, **3단계 구현 완료**) |
-| `POST /api/jobs/<job>/review` `{started_at, ended_at, seen, pick, maybe, discard}` | 훑기 기록 저장 (FR-26) |
+| `POST /api/jobs/<job>/review` `{id, started_at, ended_at, seen, pick, maybe, discard}` | 훑기 기록 저장 (FR-26, **4단계 로컬 부분 구현 완료**). 같은 id는 한 줄만 남음, 잘못된 값은 400. 행사 폴더의 `reviews.jsonl`에 덧붙임 |
 | `POST /api/jobs/<job>/sort` (기존) | 담기에 현재 표시를 반영. 기존 `rescue` 입력은 제거하고 표시로 대체 |
 
 실행 취소(⌘Z)는 서버 API 없이 화면이 **이전 표시를 다시 보내는** 방식으로 한다(해제 또는 이전 표시 복원). 그래서 서버 규칙(한 장에 하나, 이력 보존)이 그대로 지켜진다. **(2단계 구현 완료)** 셀렉·보류·버릴 컷은 화면이 보낸 값이 아니라 서버에 저장된 표시를 서버가 읽어 담기에 쓴다.

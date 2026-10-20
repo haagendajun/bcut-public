@@ -129,3 +129,19 @@ JSON.stringify({
   minWidth: edge.w >= 0.03, none: [R.eyeCrop(null, 10, 10), R.eyeCrop({eyes: []}, 10, 10), R.eyeCrop({}, 10, 10)]});
 """, tmp_path)
     assert r == {"both": True, "shape": 0.45, "inside": True, "minWidth": True, "none": [None, None, None]}
+
+
+def test_session_summary_gives_time_text_and_per_photo_seconds(tmp_path):
+    r = run_js("""
+var R = BcutReviewLogic;
+var s = R.sessionSummary(120, 0, 600000);            // 10분 동안 120장
+var none = R.sessionSummary(0, 1000, 5000);          // 본 사진이 없으면 장당 시간도 문장도 없다
+var rec = R.sessionRecord('id-1', Date.UTC(2026, 9, 20, 1, 0, 0), Date.UTC(2026, 9, 20, 1, 10, 0), 120,
+                          {pick: 30, maybe: 5, discard: 8, none: 77, total: 120});
+JSON.stringify({s: s, none: none, rec: rec, d: [R.durationText(0), R.durationText(59), R.durationText(61), R.durationText(3725)],
+                negative: R.sessionSummary(5, 5000, 1000).seconds});""", tmp_path)
+    assert r["s"] == {"seconds": 600, "perPhoto": 5, "text": "120장을 10분 0초 동안 봤어요 (장당 약 5초)"}
+    assert r["none"] == {"seconds": 4, "perPhoto": None, "text": ""}
+    assert r["rec"] == {"id": "id-1", "started_at": "2026-10-20T01:00:00.000Z", "ended_at": "2026-10-20T01:10:00.000Z",
+                        "seen": 120, "pick": 30, "maybe": 5, "discard": 8}
+    assert r["d"] == ["0초", "59초", "1분 1초", "62분 5초"] and r["negative"] == 0

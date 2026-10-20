@@ -46,6 +46,23 @@
     return [Math.max(0, index - radius), Math.min(total, index + radius + 1)];
   }
 
+  /* 훑기 한 번의 시간: "N분 M초", 장당 몇 초 (spec FR-26). 본 사진이 없으면 장당 시간은 없다 */
+  function durationText(seconds) {
+    var s = Math.max(0, Math.round(seconds)), m = Math.floor(s / 60);
+    return m ? m + '분 ' + (s % 60) + '초' : s + '초';
+  }
+  function sessionSummary(seen, startMs, endMs) {
+    var seconds = Math.max(0, (endMs - startMs) / 1000);
+    var per = seen > 0 ? Math.round(seconds / seen * 10) / 10 : null;
+    return {seconds: seconds, perPhoto: per,
+            text: seen > 0 ? seen + '장을 ' + durationText(seconds) + ' 동안 봤어요 (장당 약 ' + per + '초)' : ''};
+  }
+  /* 서버로 보낼 훑기 기록 (ERD review_sessions 열과 같은 이름으로 서버가 저장한다) */
+  function sessionRecord(id, startMs, endMs, seen, counts) {
+    return {id: id, started_at: new Date(startMs).toISOString(), ended_at: new Date(endMs).toISOString(),
+            seen: seen, pick: counts.pick, maybe: counts.maybe, discard: counts.discard};
+  }
+
   /* 눈 확대: 얼굴의 눈 상자들을 합쳐 양쪽 눈이 들어오는 가로로 긴 영역을 만든다 (좌표는 사진 크기에 대한 비율).
      w, h는 사진 픽셀 크기. 눈 위치가 없으면 null. 가로:세로가 1:0.45가 되게 픽셀 비율을 맞추고 사진 안으로 밀어 넣는다 */
   function eyeCrop(face, w, h) {
@@ -70,7 +87,8 @@
   function dropLast(history) { return history.slice(0, -1); }
   function dropChange(history, change) { return history.filter(function (h) { return h !== change; }); }
 
-  var api = {MARKS: MARKS, eyeCrop: eyeCrop, recordChange: recordChange, lastChange: lastChange, dropLast: dropLast,
+  var api = {MARKS: MARKS, durationText: durationText, sessionSummary: sessionSummary,
+             sessionRecord: sessionRecord, eyeCrop: eyeCrop, recordChange: recordChange, lastChange: lastChange, dropLast: dropLast,
              dropChange: dropChange, KEY_TO_KIND: KEY_TO_KIND, markKey: markKey, isSuspect: isSuspect, order: order,
              marksMap: marksMap, nextMark: nextMark, move: move, resumeIndex: resumeIndex, counts: counts,
              windowRange: windowRange};

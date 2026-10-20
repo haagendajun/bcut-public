@@ -3,14 +3,14 @@
 > 기획 상태. 근거: `docs/database-plan.md`, `docs/select-mode-plan.md`, `GLOSSARY.md`, `docs/adr/0001~0008`.
 > 슈파베이스 DB(PostgreSQL)에 둘 테이블이다. 로컬 CSV·올릴 대기 목록은 DB 밖이다.
 >
-> **적용 상태 (2026-10-20):** 이 ERD는 **셀렉 훑기 모드 기획이 반영된 목표 구조**다. 지금 슈파베이스에 적용된 DB는 `keep_marks`를 쓰는 이전 구조(8개 테이블, 데이터 0건)이고, 아래 "적용 대기 변경"은 **아직 DB에 적용하지 않았다.**
+> **적용 상태 (2026-10-20):** 이 ERD가 **지금 슈파베이스에 적용된 구조**다. 셀렉 훑기 변경(`photo_marks`, `review_sessions`, `sort_items.mark_kind`)을 마이그레이션 `select_mode_marks_and_reviews`(파일: `supabase/migrations/20261020000200_select_mode_marks_and_reviews.sql`)로 **적용했다.** 적용 뒤 테이블 9개·접근 제한 켜짐·비로그인 읽기 불가·삭제 권한 없음을 조회로 확인했고, 임시 계정 시험 9개 항목(적용 후 전부 취소)이 통과했다. 데이터는 0건이다.
 
-## 적용 대기 변경 (셀렉 훑기 모드, ADR-0007·0008)
+## 적용된 변경 (셀렉 훑기 모드, ADR-0007·0008, 2026-10-20 적용)
 
 | 변경 | 이유 |
 |---|---|
 | `keep_marks` → **`photo_marks`**: `kind` 열(`pick` / `maybe` / `discard`) 추가. 취소되지 않은 표시는 사진당 하나 | 표시가 셀렉·보류·버릴 컷 세 가지가 되고 "남기기"는 없어졌다 |
-| **`review_sessions`** 신규 | 훑기 한 번의 시간·본 사진 수·표시 수를 기록해 장당 훑는 시간을 잰다 |
+| **`review_sessions`** 신규 | 훑기 한 번의 시간·본 사진 수·표시 수를 기록해 장당 훑는 시간을 잰다. `scan_id`는 비워 둘 수 있다(검사 기록 업로드와 순서가 엇갈려도 막히지 않게). 표시 수는 훑기를 마칠 때의 합계 |
 | `sort_items.kept` → **`mark_kind`** (null 가능) | 나누어 담을 때 적용된 표시를 기록 (셀렉·보류 폴더) |
 | `sorts.counts`(jsonb)에 셀렉·보류 장수 포함 | 열 추가 없음 |
 
@@ -98,7 +98,7 @@ erDiagram
         uuid id PK "이 컴퓨터에서 생성, 끝날 때 한 번에 올림"
         uuid owner_id FK
         uuid event_id FK
-        uuid scan_id FK "훑을 때 기준이 된 검사"
+        uuid scan_id FK "훑을 때 기준이 된 검사 (null 가능)"
         timestamptz started_at
         timestamptz ended_at
         int photos_seen "본 사진 수"

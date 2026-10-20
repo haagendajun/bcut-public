@@ -35,6 +35,17 @@
     blobs = {}; pending = {}; photoOrder = [];
   }
 
+  function newId() {   // 훑기 한 번의 번호 (같은 번호를 다시 보내도 서버가 한 줄만 남긴다)
+    return (root.crypto && root.crypto.randomUUID) ? root.crypto.randomUUID() : 'rev-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+  }
+  /* 훑기를 마칠 때 시간·장수를 이 컴퓨터에 기록한다. 본 사진이 없으면 남기지 않고, 실패해도 훑기는 막지 않는다 */
+  function sendRecord() {
+    var seen = Object.keys(R.seen).length;
+    if (!seen) return;
+    var body = RL.sessionRecord(R.id, R.startedAt, Date.now(), seen, RL.counts(R.rows, R.marks));
+    ctx.api('POST', '/api/jobs/' + ctx.job() + '/review', body).catch(function () {});
+  }
+
   function init(c) { ctx = c; }
   function isOpen() { return R !== null; }
   function see() { R.seen[R.index] = true; }
@@ -44,14 +55,15 @@
   function open(rows, markList) {
     var ordered = RL.order(rows), marks = RL.marksMap(markList);
     R = {rows: ordered, marks: marks, index: RL.resumeIndex(ordered, marks), seen: {}, skip: false, full: false,
-         msg: '', history: [], final: false, faces: {}, boxes: false};
+         msg: '', history: [], final: false, faces: {}, boxes: false,
+         id: newId(), startedAt: Date.now(), finalAt: null};
     see(); ctx.rerender();
   }
   function exit(thenSort) {
-    R = null; forgetBlobs(); ctx.onClose();
+    sendRecord(); R = null; forgetBlobs(); ctx.onClose();
     if (thenSort) ctx.openSort();
   }
-  function finish() { R.final = true; R.full = false; ctx.rerender(); }   // 마치기 -> 최종 확인
+  function finish() { R.final = true; R.full = false; R.finalAt = Date.now(); ctx.rerender(); }   // 마치기 -> 최종 확인
   function go(delta) {
     var i = RL.move(R.rows, R.index, delta, R.skip);
     R.msg = i === R.index ? (delta > 0 ? '마지막 사진이에요. 다 봤으면 Esc로 마치세요.' : '처음 사진이에요.') : '';
@@ -220,6 +232,8 @@
       stats.appendChild(s);
     });
     box.appendChild(stats);
+    var took = RL.sessionSummary(Object.keys(R.seen).length, R.startedAt, R.finalAt || Date.now()).text;
+    if (took) box.appendChild(ctx.el('p', 'lt-muted', '이번에 ' + took + '.'));
     box.appendChild(ctx.el('p', 'lt-muted', '셀렉은 "셀렉" 폴더에만, 보류는 "보류" 폴더에만 담겨요. 버릴 컷은 "버릴 것 같은 컷" 폴더에 함께 담겨요. 표시 안 한 사진은 도구가 본 대로 담겨요.'));
     if (R.msg) box.appendChild(ctx.el('div', 'lt-msg', R.msg));
     var row = ctx.el('div', 'lt-row');
