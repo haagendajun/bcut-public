@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import json
+import re
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -64,6 +66,20 @@ def _rollback_payload(res: RollbackResult, action: str) -> dict:
     }
 
 
+def work_dir(data_dir: Path, folder: Path, catalog: str) -> Path:
+    """되돌리기 기록 폴더. **카탈로그·세션마다 따로** 둔다 (같은 행사를 다른 문서에 반영해도
+    서로의 기록을 덮어쓰거나 거절하지 않게). 예전 방식(행사 폴더 바로 아래)의 기록이 이 문서의
+    것이면 그대로 쓴다."""
+    base = data_dir / "capture-one" / event_key(folder)
+    try:
+        legacy = json.loads((base / FILENAME).read_text(encoding="utf-8")).get("catalog")
+    except (OSError, ValueError, AttributeError):
+        legacy = None
+    if legacy == catalog:
+        return base
+    return base / (re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", catalog).strip("._") or "doc")
+
+
 def _is_session(bridge) -> bool:
     """세션이면 사진 읽기 방식을 바꾸고 True. 종류를 알 수 없는 창구(시험용)는 카탈로그로 본다."""
     kind = getattr(bridge, "document_kind", None)
@@ -85,7 +101,7 @@ def handle(store: MarkStore, folder: Path, names: set[str], data_dir: Path, body
         style = parse_style(body)
     except StyleError as exc:
         return 400, {"error": str(exc)}
-    out_dir = data_dir / "capture-one" / event_key(folder)
+    out_dir = work_dir(data_dir, folder, catalog.strip())
     out_dir.mkdir(parents=True, exist_ok=True)
     bridge = make_bridge(catalog.strip())
     try:

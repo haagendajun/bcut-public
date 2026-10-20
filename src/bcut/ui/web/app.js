@@ -7,6 +7,7 @@
   var Migrate = window.BcutMigrate;
   var Cloud = window.BcutCloud;
   var Capture = window.BcutCapture;
+  var Records = window.BcutRecords;
   var root = document.getElementById('app');
   var TOKEN = root.dataset.token;
   var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {}, notice: null,
@@ -70,7 +71,7 @@
     hero.appendChild(el('h1', null, 'bcut'));
     hero.appendChild(el('p', 'lead', '행사 사진에서 눈을 감았거나 흔들린 사진처럼 버릴 만한 컷을 찾아서, 폴더로 나누어 줘요.'));
     hero.appendChild(el('div', 'trust', '사진은 이 컴퓨터 밖으로 나가지 않아요 · 원본은 보기만 하고 지우거나 옮기지 않아요'));
-    hero.appendChild(Cloud.chip());
+    hero.appendChild(Cloud.chip()); hero.appendChild(Records.button());
     var drop = el('div', 'drop');
     drop.appendChild(el('h2', null, '사진이 들어 있는 폴더를 여기에 끌어다 놓으세요'));
     drop.appendChild(el('p', null, '카메라 원본(RAW, CR3) 사진이 있는 폴더'));
@@ -282,7 +283,7 @@
     sortBtn.addEventListener('click', function () { SortView.open(); });
     var reviewBtn = el('button', 'primary', S.markCount ? '이어서 훑기' : '훑기 시작');
     reviewBtn.addEventListener('click', startReview);
-    act.appendChild(Cloud.chip()); act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
+    act.appendChild(Cloud.chip()); act.appendChild(Records.button()); act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
     w.appendChild(bar);
     if (S.notice) w.appendChild(el('div', 'notice', S.notice));
     w.appendChild(overview(c));
@@ -332,6 +333,8 @@
 
   Cloud.init({el: el, api: api, rerender: function () { render(); }});
   Capture.init({el: el, api: api, job: function () { return S.job; }, rerender: function () { render(); }});
+  Records.init({el: el, api: api, rerender: function () { render(); }});
+  document.addEventListener('bcut-records-changed', function () { if (S.job) refreshMarkCount(); });
 
   /* ---- 그리기 ---- */
   function render() {
@@ -345,6 +348,7 @@
     var m = SortView.render(); if (m) root.appendChild(m);
     var cm = Cloud.render(); if (cm) root.appendChild(cm);
     var cp = Capture.render(); if (cp) root.appendChild(cp);
+    var rc = Records.render(); if (rc) root.appendChild(rc);
     window.scrollTo(0, scroll);
   }
   document.addEventListener('keydown', function (e) {

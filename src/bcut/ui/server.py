@@ -31,6 +31,7 @@ API (모두 JSON, 토큰 필요):
   GET  /api/jobs/<job>/faces/<파일>      -> {w, h, faces: [{box, area, eyes}]}  (얼굴·눈 위치)
   GET  /api/cloud/status · POST /api/cloud/consent|login|logout|sync -> 올리기 (cloud_service)
   POST /api/jobs/<job>/capture-one {catalog, action} -> Capture One에 표시 (미리보기·반영·되돌리기)
+  GET  /api/records · POST /api/records/clear-marks|trash|restore -> 기록 관리 (records.py)
   POST /api/jobs/<job>/review {id, started_at, ended_at, seen, pick, maybe, discard} -> 훑기 기록
 """
 
@@ -64,6 +65,7 @@ from bcut.ui.photos import (  # noqa: F401  rotate_*는 기존 이름으로도 �
     rotate_image,
     rotate_jpeg,
 )
+from bcut.ui.records import handle as handle_records
 from bcut.ui.reviews import ReviewStore, post_review
 
 LOOPBACK = "127.0.0.1"
@@ -166,6 +168,7 @@ STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "t
           "/migrate.js": ("migrate.js", "text/javascript"),
           "/cloud_view.js": ("cloud_view.js", "text/javascript"),
           "/capture_view.js": ("capture_view.js", "text/javascript"),
+          "/records_view.js": ("records_view.js", "text/javascript"),
           "/style.css": ("style.css", "text/css")}
 
 
@@ -339,6 +342,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._scan()
         if path.startswith("/api/cloud/"):
             return self._cloud(method, path)
+        if path.startswith("/api/records"):
+            return self._records(method, path)
         m = re.fullmatch(r"/api/jobs/([0-9a-f]{12})(/.*)?", path)
         if m:
             job = self.state.job(m.group(1))
@@ -417,6 +422,14 @@ class _Handler(BaseHTTPRequestHandler):
         if method == "POST" and body is None:
             return
         status, payload = handle_cloud(self.state.cloud, method, path, body)
+        self._send(HTTPStatus(status), payload)
+
+    def _records(self, method: str, path: str) -> None:
+        body = self._json_body() if method == "POST" else None
+        if method == "POST" and body is None:
+            return
+        state = self.state
+        status, payload = handle_records(state.marks, state.cfg.data_dir, method, path, body)
         self._send(HTTPStatus(status), payload)
 
     def _capture(self, job: ScanJob) -> None:

@@ -97,6 +97,21 @@ class MarkStore:
         marks = [{"file": f, "size": s, "kind": m["kind"]} for (f, s), m in sorted(active.items())]
         return marks, broken
 
+    def clear_all(self, event: str) -> int:
+        """지금 있는 표시를 모두 해제한다 (취소 줄만 덧붙여 이력은 남는다). 해제한 장수를 준다."""
+        with self._lock:
+            active, _ = self._read(event)
+            if not active:
+                return 0
+            at = self._now()
+            lines = [{"id": uuid.uuid4().hex, "cancel": m["id"], "at": at} for m in active.values()]
+            path = self._path(event)
+            with path.open("a", encoding="utf-8") as f:
+                f.write("".join(json.dumps(x, ensure_ascii=False) + "\n" for x in lines))
+                f.flush()
+                os.fsync(f.fileno())
+        return len(lines)
+
     def set(self, event: str, file: str, size: int, kind: str | None) -> str | None:
         """표시를 달거나(kind) 해제한다(None). 앞 표시는 취소 줄로 닫고, 지금 표시를 돌려준다."""
         if kind is not None and kind not in KINDS:

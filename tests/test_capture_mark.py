@@ -212,6 +212,33 @@ def test_bad_requests():
     assert handle(store, folder, set(), Path("/d"), {"action": "preview", "catalog": " "})[0] == 400
 
 
+def test_each_document_keeps_its_own_undo_record(world):
+    """같은 행사를 카탈로그에 반영한 뒤 세션에 반영해도 서로의 기록을 거절하지 않는다."""
+    folder, names, *_ = world
+    first = Bridge(folder, names, catalog="test")
+    second = Bridge(folder, names, catalog="sejun.cosessiondb")
+    assert run(world, "apply", bridge=first, catalog="test")[1]["ok"]
+    status, out = run(world, "apply", bridge=second, catalog="sejun.cosessiondb")
+    assert out["aborted"] is None and out["ok"] and out["applied_files"] == 4
+    # 각자 되돌린다
+    assert run(world, "rollback", bridge=second, catalog="sejun.cosessiondb", commit=True)[1]["ok"]
+    assert run(world, "rollback", bridge=first, catalog="test", commit=True)[1]["ok"]
+    assert second.variants["A.CR3"].keywords == ("사용자키워드",)
+    assert first.variants["A.CR3"].keywords == ("사용자키워드",)
+
+
+def test_legacy_record_of_the_same_document_is_still_used(world):
+    folder, names, store, data, _ = world
+    legacy_dir = data / "capture-one" / event_key(folder)
+    legacy_dir.mkdir(parents=True)
+    bridge = Bridge(folder, names, catalog="test")
+    run(world, "apply", bridge=bridge, catalog="test")  # 새 방식: 문서별 폴더에 저장
+    moved = next((data / "capture-one").rglob("bcut-backup.json"))
+    moved.replace(legacy_dir / "bcut-backup.json")  # 예전 위치로 옮겨 예전 방식을 흉내
+    status, out = run(world, "rollback", bridge=bridge, catalog="test", commit=True)
+    assert out["aborted"] is None and out["stripped_files"] == 4
+
+
 def test_default_never_touches_ratings_or_color_tags(world):
     run(world, "apply")
     bridge = world[4]
