@@ -47,6 +47,15 @@ def test_preload_exposes_only_three_small_functions():
     assert PRELOAD.count("ipcRenderer.invoke") == 1  # 화면이 부를 수 있는 명령은 폴더 선택 하나
 
 
+def test_cmd_z_is_handled_by_our_menu_item_not_the_default_undo():
+    main = (EL / "main.js").read_text(encoding="utf-8")
+    assert "role: 'undo'" not in main  # 기본 실행 취소가 ⌘Z를 가로채지 않게 한다
+    assert "accelerator: 'CmdOrCtrl+Z'" in main and "bcut-undo" in main
+    assert main.count("executeJavaScript(") == 1 and "executeJavaScript(UNDO_PROBE)" in main  # 고정 문장만
+    app = (EL.parent / "src" / "bcut" / "ui" / "web" / "app.js").read_text(encoding="utf-8")
+    assert "addEventListener('bcut-undo'" in app
+
+
 def test_package_json():
     pkg = json.loads((EL / "package.json").read_text(encoding="utf-8"))
     assert pkg["main"] == "main.js" and pkg["private"] is True and pkg["productName"] == "bcut"

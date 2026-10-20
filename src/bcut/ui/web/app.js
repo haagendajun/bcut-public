@@ -3,12 +3,14 @@
   'use strict';
   var L = window.BcutLogic;
   var Review = window.BcutReview;
+  var SortView = window.BcutSortView;
+  var Migrate = window.BcutMigrate;
   var root = document.getElementById('app');
   var TOKEN = root.dataset.token;
-  var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {},
+  var S = {view: 'start', folder: '', job: null, progress: {done: 0, total: 0}, rows: [], rescued: {}, notice: null,
            mode: 'priority', open: {candidate: true, review: true, rescued: true, normal: false, other: false},
            tier: 'flagged', reason: null, note: null, sort: 'confidence', size: 230, error: null,
-           list: [], viewerIndex: -1, full: false, sortModal: null, markCount: 0};
+           list: [], viewerIndex: -1, full: false, markCount: 0};
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -46,18 +48,6 @@
   function thumbUrl(f) { return url('/api/jobs/' + S.job + '/thumb/' + encodeURIComponent(f)); }
   function photoUrl(f, size) { return url('/api/jobs/' + S.job + '/photo/' + encodeURIComponent(f) + '?size=' + size); }
   function isFlagged(r) { return r.status === 'candidate' || r.status === 'review'; }
-
-  /* ---- 남기기 기억 (이 컴퓨터의 브라우저 저장소에만) ---- */
-  function rescueKey() { return 'bcut-rescue:' + S.folder; }
-  function loadRescued() {
-    S.rescued = {};
-    try { var raw = localStorage.getItem(rescueKey()); if (raw) JSON.parse(raw).forEach(function (f) { S.rescued[f] = true; }); } catch (e) {}
-  }
-  function saveRescued() { try { localStorage.setItem(rescueKey(), JSON.stringify(Object.keys(S.rescued))); } catch (e) {} }
-  function toggleRescue(file) {
-    if (S.rescued[file]) delete S.rescued[file]; else S.rescued[file] = true;
-    saveRescued(); render();
-  }
 
   /* ---- 시작 화면 ---- */
   function chooseFolder() {
@@ -127,9 +117,12 @@
   }
   function loadResults() {
     return api('GET', '/api/jobs/' + S.job + '/results').then(function (j) {
-      S.rows = j.rows; loadRescued(); S.view = 'results'; S.mode = 'priority'; S.tier = 'flagged'; S.reason = null; S.note = null;
+      S.rows = j.rows; S.notice = null; S.view = 'results'; S.mode = 'priority'; S.tier = 'flagged'; S.reason = null; S.note = null;
       S.open = {candidate: true, review: true, rescued: true, normal: false, other: false}; render();
-      refreshMarkCount();
+      Migrate.toPicks(S.folder, S.rows, api, S.job).then(function (n) {
+        if (n) S.notice = '이전에 남겨 둔 사진 ' + n + '장을 셀렉으로 옮겼어요.';
+        refreshMarkCount();
+      });
     });
   }
   /* ---- 훑기 모드 (review.js) ---- */
@@ -141,8 +134,10 @@
       .catch(function (e) { S.error = e.message; render(); });
   }
   Review.init({el: el, api: api, job: function () { return S.job; }, thumbUrl: thumbUrl, photoUrl: photoUrl,
-               rerender: function () { render(); },
+               rerender: function () { render(); }, openSort: function () { SortView.open(); },
                onClose: function () { render(); refreshMarkCount(); }});
+  // 앱 메뉴의 "실행 취소"(⌘Z)가 훑는 중이면 직전 표시를 되돌린다. 아니면 기본 동작(글자 입력 되돌리기)을 그대로 둔다
+  window.addEventListener('bcut-undo', function (e) { if (Review.undo()) e.preventDefault(); });
 
   function renderProgress() {
     var w = el('div', 'wrap'); var c = el('div', 'center');
@@ -166,7 +161,6 @@
     var tier = L.tierOf(r, S.rescued);
     if (tier === 'candidate') im.appendChild(el('span', 'tag t1', '1순위'));
     else if (tier === 'review') im.appendChild(el('span', 'tag t2', '2순위'));
-    else if (tier === 'rescued') im.appendChild(el('span', 'tag t0', '남김'));
     function open() { openViewer(index); }
     im.addEventListener('click', open);
     im.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
@@ -186,11 +180,6 @@
     });
     if (b.childNodes.length) body.appendChild(b);
     body.appendChild(el('div', 'name', r.file));
-    if (isFlagged(r)) {
-      var btn = el('button', 'keep', rescued ? '남기기 취소' : '남기기');
-      btn.addEventListener('click', function () { toggleRescue(r.file); });
-      body.appendChild(btn);
-    }
     it.appendChild(body);
     return it;
   }
@@ -205,7 +194,7 @@
     ov.appendChild(el('h2', 'headline', left ? '먼저 확인할 컷이 ' + left + '장 있어요' : '확인할 컷이 없어요'));
     ov.appendChild(el('p', 'lead', '사진 ' + c.total + '장을 검사했어요. 아래에서 위부터 차례로 보면 중요한 것부터 끝나요.'));
     var meter = el('div', 'meter');
-    var parts = [['candidate', 'var(--p1)', '버릴 것 같은 컷'], ['review', 'var(--p2)', '직접 확인'], ['rescued', 'var(--accent)', '남긴 컷'],
+    var parts = [['candidate', 'var(--p1)', '버릴 것 같은 컷'], ['review', 'var(--p2)', '직접 확인'],
                  ['normal', 'var(--ok)', '이상 없음'], ['other', 'var(--faint)', '얼굴 없음·판단 못 함']];
     parts.forEach(function (p) {
       if (!c[p[0]]) return;
@@ -268,7 +257,7 @@
     sel.addEventListener('change', function () { S.sort = sel.value; render(); });
     ctl.appendChild(sel); w.appendChild(ctl);
     S.list = L.sortRows(L.filterRows(S.rows, S.rescued, {tier: S.tier, reason: S.reason, note: S.note}), S.sort);
-    w.appendChild(el('p', 'count', '지금 보이는 사진 ' + S.list.length + '장 / 전체 ' + c.total + '장 · 남기기로 한 컷 ' + c.rescued + '장'));
+    w.appendChild(el('p', 'count', '지금 보이는 사진 ' + S.list.length + '장 / 전체 ' + c.total + '장'));
     if (!S.list.length) w.appendChild(el('div', 'empty', '이 조건에 맞는 사진이 없어요.'));
     else w.appendChild(gridOf(S.list, 0));
   }
@@ -284,11 +273,12 @@
     var other = el('button', 'ghost', '다른 폴더 열기');
     other.addEventListener('click', function () { S.view = 'start'; S.rows = []; render(); });
     var sortBtn = el('button', null, '폴더로 나누어 담기…');
-    sortBtn.addEventListener('click', openSort);
+    sortBtn.addEventListener('click', function () { SortView.open(); });
     var reviewBtn = el('button', 'primary', S.markCount ? '이어서 훑기' : '훑기 시작');
     reviewBtn.addEventListener('click', startReview);
     act.appendChild(other); act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
     w.appendChild(bar);
+    if (S.notice) w.appendChild(el('div', 'notice', S.notice));
     w.appendChild(overview(c));
     var tb = el('div', 'toolbar');
     var seg = el('div', 'seg');
@@ -303,7 +293,7 @@
     tb.appendChild(rg);
     w.appendChild(tb);
     if (S.mode === 'priority') renderPriority(w); else renderAll(w, c);
-    w.appendChild(el('p', 'note', '"이상 없음"은 눈 감김·너무 밝거나 어두움·흔들림·초점에서 문제가 안 보인다는 뜻이고, 좋은 사진이라는 뜻은 아니에요. 사진을 누르면 크게 볼 수 있고, "남기기"한 컷은 나누어 담을 때 "이상 없음" 폴더로 가요.'));
+    w.appendChild(el('p', 'note', '"이상 없음"은 눈 감김·너무 밝거나 어두움·흔들림·초점에서 문제가 안 보인다는 뜻이고, 좋은 사진이라는 뜻은 아니에요. 사진을 누르면 크게 볼 수 있고, "훑기 시작"을 누르면 한 장씩 넘기며 셀렉·보류·버릴 컷을 표시할 수 있어요.'));
     return w;
   }
 
@@ -322,7 +312,6 @@
     btn('← 이전', function () { S.viewerIndex = L.step(S.list.length, S.viewerIndex, -1); S.full = false; render(); });
     btn('다음 →', function () { S.viewerIndex = L.step(S.list.length, S.viewerIndex, 1); S.full = false; render(); });
     btn(S.full ? '화면에 맞추기 (Z)' : '크게 보기 100% (Z)', function () { S.full = !S.full; render(); });
-    if (isFlagged(r)) btn(L.isRescued(r, S.rescued) ? '남기기 취소 (R)' : '남기기 (R)', function () { toggleRescue(r.file); }, 'primary');
     btn('닫기 (Esc)', closeViewer);
     o.appendChild(top);
     o.appendChild(el('div', 'why', L.explain(r, S.rescued).join(' ')));
@@ -332,68 +321,8 @@
     return o;
   }
 
-  /* ---- 정리 흐름 ---- */
-  function openSort() { S.sortModal = {out: null, byReason: true, plan: null, result: null, busy: true, error: null}; render(); previewSort(); }
-  function sortRequest(commit) {
-    var m = S.sortModal;
-    var body = {rescue: L.rescuedNames(S.rows, S.rescued), commit: commit, by_reason: m.byReason};
-    if (m.out) body.out = m.out;
-    return api('POST', '/api/jobs/' + S.job + '/sort', body);
-  }
-  function previewSort() {
-    var m = S.sortModal; m.busy = true; m.error = null; render();
-    sortRequest(false).then(function (j) { m.plan = j; if (!m.out) m.out = j.out_root; m.busy = false; render(); })
-      .catch(function (e) { m.error = e.message; m.busy = false; render(); });
-  }
-  function commitSort() {
-    var m = S.sortModal; m.busy = true; m.error = null; render();
-    sortRequest(true).then(function (j) { m.result = j; m.busy = false; render(); })
-      .catch(function (e) { m.error = e.message; m.busy = false; render(); });
-  }
-  function renderSort() {
-    var m = S.sortModal; if (!m) return null;
-    var modal = el('div', 'modal'); var p = el('div', 'panel');
-    p.appendChild(el('h2', null, m.result ? '다 담았어요' : '폴더로 나누어 담기'));
-    if (m.error) p.appendChild(el('div', 'err', m.error));
-    if (m.result) {
-      var r = m.result;
-      p.appendChild(el('p', null, '원본은 그대로예요. 아래 새 폴더에 사본을 나누어 담았어요. 폴더를 열어서 확인해 보세요.'));
-      p.appendChild(el('div', 'path', r.result_dir || ''));
-      L.planLines(r).forEach(function (t) { p.appendChild(el('div', 'muted', t)); });
-      if (r.aborted) p.appendChild(el('div', 'err', friendly(r.aborted)));
-      if (r.mismatches && r.mismatches.length) p.appendChild(el('div', 'err', '원본과 크기가 다른 사본이 ' + r.mismatches.length + '개 있어요. 폴더를 지우고 다시 담아 주세요.'));
-      var row = el('div', 'row');
-      var open = el('button', 'primary', 'Finder에서 열기');
-      open.addEventListener('click', function () { api('POST', '/api/reveal', {path: r.result_dir}).catch(function (e) { m.error = e.message; render(); }); });
-      var close = el('button', null, '닫기'); close.addEventListener('click', function () { S.sortModal = null; render(); });
-      row.appendChild(open); row.appendChild(close); p.appendChild(row);
-    } else {
-      var pl = m.plan;
-      if (pl) {
-        p.appendChild(el('p', null, '사진 ' + pl.photos + '장을 아래처럼 폴더에 나누어 담아요 (사본 ' + pl.placements + '개). 원본은 건드리지 않아요.'));
-        var ul = el('ul'); L.planLines(pl).forEach(function (t) { ul.appendChild(el('li', null, t)); }); p.appendChild(ul);
-        if (pl.rescued.length) p.appendChild(el('div', 'muted', '남기기로 한 컷 ' + pl.rescued.length + '장은 "이상 없음" 폴더로 가요.'));
-        p.appendChild(el('div', 'muted', pl.method === 'clone' ? '빠르게 복사해요 (저장 공간을 거의 쓰지 않아요)' :
-          '복사해요 (저장 공간이 약 ' + L.formatBytes(pl.needs_space) + ' 필요해요)'));
-        if (pl.missing.length) p.appendChild(el('div', 'err', '검사한 뒤 사라진 사진 ' + pl.missing.length + '장은 빼고 담아요.'));
-        if (pl.aborted) p.appendChild(el('div', 'err', friendly(pl.aborted)));
-      }
-      p.appendChild(el('div', 'muted', '저장할 위치'));
-      p.appendChild(el('div', 'path', m.out || '…'));
-      var chk = el('label'); var cb = el('input'); cb.type = 'checkbox'; cb.checked = m.byReason;
-      cb.addEventListener('change', function () { m.byReason = cb.checked; previewSort(); });
-      chk.appendChild(cb); chk.appendChild(document.createTextNode(' 문제 종류별 폴더도 만들기 (눈 감김, 흔들려 찍힘 등)')); p.appendChild(chk);
-      var row2 = el('div', 'row');
-      var change = el('button', null, '위치 바꾸기…');
-      change.addEventListener('click', function () { chooseFolder().then(function (f) { if (f) { m.out = f; previewSort(); } }); });
-      var cancel = el('button', null, '취소'); cancel.addEventListener('click', function () { S.sortModal = null; render(); });
-      var go = el('button', 'primary', m.busy ? '잠시만요…' : '나누어 담기');
-      go.disabled = m.busy || !pl || !!pl.aborted || !pl.photos; go.addEventListener('click', commitSort);
-      row2.appendChild(change); row2.appendChild(cancel); row2.appendChild(go); p.appendChild(row2);
-    }
-    modal.appendChild(p);
-    return modal;
-  }
+  SortView.init({el: el, api: api, job: function () { return S.job; }, chooseFolder: chooseFolder, friendly: friendly,
+                 rerender: function () { render(); }});
 
   /* ---- 그리기 ---- */
   function render() {
@@ -404,18 +333,16 @@
     var v = S.viewerIndex >= 0 ? renderViewer() : null; if (v) root.appendChild(v);
     var rv = Review.render(); if (rv) root.appendChild(rv);
     document.body.classList.toggle('lt-open', Review.isOpen());
-    var m = renderSort(); if (m) root.appendChild(m);
+    var m = SortView.render(); if (m) root.appendChild(m);
     window.scrollTo(0, scroll);
   }
   document.addEventListener('keydown', function (e) {
     if (Review.isOpen()) { if (Review.handleKey(e)) e.preventDefault(); return; }
-    if (S.viewerIndex < 0 || S.sortModal) return;
-    var r = S.list[S.viewerIndex];
+    if (S.viewerIndex < 0 || SortView.isOpen()) return;
     if (e.key === 'Escape') closeViewer();
     else if (e.key === 'ArrowRight') { S.viewerIndex = L.step(S.list.length, S.viewerIndex, 1); S.full = false; render(); }
     else if (e.key === 'ArrowLeft') { S.viewerIndex = L.step(S.list.length, S.viewerIndex, -1); S.full = false; render(); }
     else if ((e.key === 'z' || e.key === 'Z')) { S.full = !S.full; render(); }
-    else if ((e.key === 'r' || e.key === 'R') && r && isFlagged(r)) toggleRescue(r.file);
   });
   // 앱 메뉴 '파일 > 폴더 열기…'에서 고른 폴더
   if (window.bcutShell && window.bcutShell.onOpenFolder) window.bcutShell.onOpenFolder(function (p) { startScan(p); });

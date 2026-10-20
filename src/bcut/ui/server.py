@@ -16,7 +16,8 @@
 
 API (모두 JSON, 토큰 필요):
   GET  /api/health                      -> {ok, version}
-  GET  /  /app.js  /logic.js  /review_logic.js  /review.js  /style.css  -> 화면 파일 (토큰 주입)
+  GET  /  /app.js  /logic.js  /review_logic.js  /review.js  /sort_view.js  /migrate.js  /style.css
+                                        -> 화면 파일 (토큰 주입)
   POST /api/choose-folder               -> {folder|null}  (맥의 폴더 선택 창)
   POST /api/reveal {path}               -> Finder에서 열기 (이 서버가 만든 정리 결과 폴더만)
   POST /api/scan   {folder}             -> {job}  (백그라운드 분석 시작)
@@ -186,7 +187,9 @@ def default_reveal(path: Path) -> None:
 WEB_DIR = Path(__file__).parent / "web"
 STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "text/javascript"),
           "/review_logic.js": ("review_logic.js", "text/javascript"),
-          "/review.js": ("review.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
+          "/review.js": ("review.js", "text/javascript"),
+          "/sort_view.js": ("sort_view.js", "text/javascript"),
+          "/migrate.js": ("migrate.js", "text/javascript"), "/style.css": ("style.css", "text/css")}
 
 
 class AppState:
@@ -468,10 +471,13 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.BAD_REQUEST, {"error": msg})
         names = set(job.by_name())
         known = {n for n in rescue if n in names}
+        # 셀렉·보류·버릴 컷 표시는 화면이 보낸 것이 아니라 서버에 저장된 것을 쓴다
+        stored = list_marks(self.state.marks, job.folder, names)["marks"]
+        marks = {m["file"]: m["kind"] for m in stored}
         try:
             result = run_sort(
                 job.folder, job.report, out_root, commit=bool(body.get("commit", False)),
-                rescue=known, by_reason=bool(body.get("by_reason", True)))
+                rescue=known, marks=marks, by_reason=bool(body.get("by_reason", True)))
         except SortError as exc:
             return self._send(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         plan = result.plan
@@ -485,7 +491,7 @@ class _Handler(BaseHTTPRequestHandler):
             "unlisted": plan.unlisted, "method": result.method, "needs_space": result.needs_space,
             "result_dir": str(result.result_dir) if result.result_dir else None,
             "cloned": result.cloned, "copied": result.copied, "aborted": result.aborted,
-            "mismatches": result.mismatches,
+            "mismatches": result.mismatches, "marked": plan.mark_counts(),
         })
 
 

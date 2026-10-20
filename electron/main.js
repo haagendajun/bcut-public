@@ -106,6 +106,16 @@ async function pickFolder() {
 }
 ipcMain.handle('choose-folder', pickFolder);
 
+// ⌘Z: 맥은 메뉴의 기본 "실행 취소"가 단축키를 먼저 가로채서 화면의 키 입력에 닿지 않는다.
+// 그래서 메뉴 항목을 직접 만들고, 화면(훑기 모드)이 처리하면 거기서 끝내고 아니면 기본 동작(글자 되돌리기)을 한다.
+// 화면으로 보내는 글자는 아래 고정 문장 하나뿐이다.
+const UNDO_PROBE = "(function(){var e=new CustomEvent('bcut-undo',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;})()";
+async function undoFromMenu(_item, w) {
+  if (!w) return;
+  const handled = await w.webContents.executeJavaScript(UNDO_PROBE);
+  if (!handled) w.webContents.undo();
+}
+
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: app.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
@@ -113,7 +123,7 @@ function buildMenu() {
       label: '폴더 열기…', accelerator: 'CmdOrCtrl+O',
       click: async () => { const p = await pickFolder(); if (p && win) win.webContents.send('open-folder', p); },
     }] },
-    { label: '편집', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
+    { label: '편집', submenu: [{ label: '실행 취소', accelerator: 'CmdOrCtrl+Z', click: undoFromMenu }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: '보기', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: '윈도우', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }] },
   ]));

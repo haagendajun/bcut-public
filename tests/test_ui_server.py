@@ -231,6 +231,34 @@ def test_marks_reject_bad_input(world):
     assert jbody(call(server, "GET", url)[2])["marks"] == []
 
 
+def test_sort_uses_the_stored_marks_for_pick_maybe_discard_folders(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    for name, kind in (("A.CR3", "pick"), ("B.CR3", "maybe"), ("C.CR3", "discard")):
+        call(server, "POST", f"/api/jobs/{job}/marks", {"file": name, "kind": kind})
+    before = sorted(p.read_bytes() for p in ev.iterdir())
+    out = tmp / "담기"
+    status, _, raw = call(server, "POST", f"/api/jobs/{job}/sort", {"commit": False, "out": str(out)})
+    plan = jbody(raw)
+    assert status == 200
+    assert plan["counts"]["셀렉"] == 1 and plan["counts"]["보류"] == 1 and plan["counts"]["버릴 것 같은 컷"] == 1
+    assert list(plan["counts"])[0] == "셀렉" and plan["marked"] == {"pick": 1, "maybe": 1, "discard": 1}
+    assert not out.exists()  # 미리보기는 아무것도 만들지 않는다
+    done = jbody(call(server, "POST", f"/api/jobs/{job}/sort", {"commit": True, "out": str(out)})[2])
+    d = Path(done["result_dir"])
+    assert (d / "셀렉" / "A.CR3").exists() and (d / "보류" / "B.CR3").exists()
+    assert (d / "버릴 것 같은 컷" / "C.CR3").exists()
+    assert sorted(p.read_bytes() for p in ev.iterdir()) == before  # 원본은 그대로
+
+
+def test_sort_ignores_marks_sent_by_the_screen_and_other_events(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    body = {"commit": False, "marks": {"A.CR3": "pick"}, "out": str(tmp / "o")}
+    plan = jbody(call(server, "POST", f"/api/jobs/{job}/sort", body)[2])
+    assert plan["marked"] == {"pick": 0, "maybe": 0, "discard": 0}  # 저장된 표시만 쓴다
+
+
 def test_marks_are_not_written_into_the_event_folder(world):
     server, ev, tmp, _ = world
     job = start_job(server, ev)
@@ -389,7 +417,8 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     assert status == 200 and headers["Content-Type"].startswith("text/html")
     assert TOKEN in html and "__TOKEN__" not in html
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
-                        ("/review.js", "javascript"), ("/style.css", "css")):
+                        ("/review.js", "javascript"), ("/sort_view.js", "javascript"),
+                        ("/migrate.js", "javascript"), ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
         assert status == 200 and ctype in headers["Content-Type"] and len(raw) > 100
@@ -400,11 +429,20 @@ def test_web_files_follow_the_security_rules():
     web = Path(srv.__file__).parent / "web"
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
-    for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "style.css"):
+    for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
+              "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
     assert "fetch(" in (web / "app.js").read_text(encoding="utf-8")
+
+
+def test_screen_files_avoid_retired_and_hard_words():
+    web = Path(srv.__file__).parent / "web"
+    for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js"):
+        text = (web / f).read_text(encoding="utf-8")
+        for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
+            assert word not in text, (f, word)
 
 
 def test_pyproject_packages_the_web_files():

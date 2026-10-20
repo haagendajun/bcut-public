@@ -46,7 +46,18 @@
     return [Math.max(0, index - radius), Math.min(total, index + radius + 1)];
   }
 
-  var api = {MARKS: MARKS, KEY_TO_KIND: KEY_TO_KIND, markKey: markKey, isSuspect: isSuspect, order: order,
+  /* 실행 취소 기록: 표시를 달 때마다 {key, file, before, after, from}을 쌓고, 최근 것부터 되돌린다 */
+  var HISTORY_LIMIT = 200;
+  function recordChange(history, change) {
+    var h = history.concat([change]);
+    return h.length > HISTORY_LIMIT ? h.slice(h.length - HISTORY_LIMIT) : h;
+  }
+  function lastChange(history) { return history.length ? history[history.length - 1] : null; }
+  function dropLast(history) { return history.slice(0, -1); }
+  function dropChange(history, change) { return history.filter(function (h) { return h !== change; }); }
+
+  var api = {MARKS: MARKS, recordChange: recordChange, lastChange: lastChange, dropLast: dropLast,
+             dropChange: dropChange, KEY_TO_KIND: KEY_TO_KIND, markKey: markKey, isSuspect: isSuspect, order: order,
              marksMap: marksMap, nextMark: nextMark, move: move, resumeIndex: resumeIndex, counts: counts,
              windowRange: windowRange};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

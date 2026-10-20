@@ -10,9 +10,11 @@
 - **미리보기가 기본이다** (`commit=True`일 때만 만든다).
 
 폴더 규칙 (화면과 같은 쉬운 말):
-  버릴 것 같은 컷 = candidate, 직접 확인 = review, 판단 못 함 = unscorable,
-  이상 없음 = normal, no_face, 그리고 사용자가 "남기기"한 컷
-  문제 종류별/<문제 종류> = 버릴 것 같은 컷·직접 확인 컷이 걸린 문제마다 (남긴 컷은 빠진다)
+  셀렉 = 사용자가 셀렉한 사진 (셀렉 폴더에만 담긴다), 보류 = 보류한 사진 (보류 폴더에만)
+  버릴 것 같은 컷 = candidate + 사용자가 버릴 컷으로 표시한 사진 (spec FR-25, 기록에서 구분)
+  표시가 없는 사진은 등급대로: 직접 확인 = review, 판단 못 함 = unscorable,
+  이상 없음 = normal, no_face (옛 "남기기" 목록 `--rescue`는 CLI에만 남고 이상 없음 폴더로 간다)
+  문제 종류별/<문제 종류> = 표시가 없는 버릴 것 같은 컷·직접 확인 컷이 걸린 문제마다
 """
 
 from __future__ import annotations
@@ -35,6 +37,12 @@ FOLDER_REVIEW = "직접 확인"
 FOLDER_NORMAL = "이상 없음"
 FOLDER_UNSCORABLE = "판단 못 함"
 FOLDER_REASONS = "문제 종류별"
+FOLDER_PICK = "셀렉"
+FOLDER_MAYBE = "보류"
+# 사용자 표시 -> 폴더. 버릴 컷은 도구가 찾은 "버릴 것 같은 컷" 폴더에 합친다
+MARK_FOLDER = {"pick": FOLDER_PICK, "maybe": FOLDER_MAYBE, "discard": FOLDER_CANDIDATE}
+FOLDER_ORDER = (FOLDER_PICK, FOLDER_MAYBE, FOLDER_CANDIDATE, FOLDER_REVIEW, FOLDER_NORMAL,
+                FOLDER_UNSCORABLE, FOLDER_REASONS)  # 미리보기에서 셀렉이 맨 앞
 RECORD_NAME = "정리 기록.json"
 
 REASON_LABELS = {
@@ -99,15 +107,25 @@ class SortPlan:
     # 살린 컷 목록에 있지만 후보·확인이 아닌 것 (무시한다)
     unknown_rescue: list[str] = field(default_factory=list)
     bytes_total: int = 0  # 복제본 전체 크기 (복사가 되면 실제로 드는 용량)
+    marked: dict[str, str] = field(default_factory=dict)  # 사용자 표시가 반영된 사진 -> 표시
+    unknown_marks: list[str] = field(default_factory=list)  # 표시는 있지만 이번 정리에 없는 사진
 
     def counts(self) -> dict[str, int]:
-        return {name: len(files) for name, files in sorted(self.folders.items())}
+        def rank(name: str) -> tuple[int, str]:
+            top = name.split("/")[0]
+            return (FOLDER_ORDER.index(top) if top in FOLDER_ORDER else len(FOLDER_ORDER), name)
+        return {name: len(self.folders[name]) for name in sorted(self.folders, key=rank)}
+
+    def mark_counts(self) -> dict[str, int]:
+        return {k: sum(1 for v in self.marked.values() if v == k) for k in MARK_FOLDER}
 
 
 def plan_sort(
-    rows: list[Row], event_folder: Path, *, rescue: set[str] | None = None, by_reason: bool = True,
+    rows: list[Row], event_folder: Path, *, rescue: set[str] | None = None,
+    marks: dict[str, str] | None = None, by_reason: bool = True,
 ) -> SortPlan:
     rescue = rescue or set()
+    marks = {f: k for f, k in (marks or {}).items() if k in MARK_FOLDER}
     plan = SortPlan()
     folders: dict[str, list[str]] = defaultdict(list)
     listed = {r.file for r in rows}
@@ -122,7 +140,10 @@ def plan_sort(
             continue
         size = (event_folder / r.file).stat().st_size
         plan.files += 1
-        if r.status in RESCUABLE and r.file in rescue:
+        if r.file in marks:  # 사용자 표시가 도구 판정보다 우선한다
+            plan.marked[r.file] = marks[r.file]
+            places = [MARK_FOLDER[marks[r.file]]]
+        elif r.status in RESCUABLE and r.file in rescue:
             plan.rescued.append(r.file)
             places = [FOLDER_NORMAL]
         else:
@@ -133,6 +154,7 @@ def plan_sort(
             folders[p].append(r.file)
             plan.placements += 1
             plan.bytes_total += size
+    plan.unknown_marks = sorted(f for f in marks if f not in plan.marked)
     plan.folders = dict(folders)
     return plan
 
@@ -198,12 +220,12 @@ class SortResult:
 
 def run_sort(
     event_folder: Path, report_csv: Path, out_root: Path, *, commit: bool = False,
-    rescue: set[str] | None = None, by_reason: bool = True,
+    rescue: set[str] | None = None, marks: dict[str, str] | None = None, by_reason: bool = True,
     now: Callable[[], datetime] = datetime.now,
     free_space: Callable[[Path], int] = lambda p: shutil.disk_usage(p).free,
 ) -> SortResult:
     rows = read_rows(report_csv)
-    plan = plan_sort(rows, event_folder, rescue=rescue, by_reason=by_reason)
+    plan = plan_sort(rows, event_folder, rescue=rescue, marks=marks, by_reason=by_reason)
     res = SortResult(mode="commit" if commit else "dry-run", plan=plan)
     if not plan.files:
         res.aborted = "정리할 사진이 없다 (리포트의 파일이 행사 폴더에 없다)"
@@ -263,7 +285,8 @@ def _write_record(result_dir: Path, event_folder: Path, report_csv: Path, plan: 
         "photos": plan.files,
         "placements": plan.placements,
         "method": res.method, "cloned": res.cloned, "copied": res.copied,
-        "rescued": plan.rescued, "missing": plan.missing, "unlisted": plan.unlisted,
+        "rescued": plan.rescued, "marks": plan.marked, "missing": plan.missing,
+        "unlisted": plan.unlisted,
         "size_mismatches": res.mismatches, "aborted": res.aborted,
         "files": {name: places for name, places in sorted(entries.items())},
     }

@@ -85,3 +85,32 @@ def test_filmstrip_window_stays_inside_the_list(tmp_path):
     r = run_js("var R = BcutReviewLogic; JSON.stringify([R.windowRange(1500, 750, 12), R.windowRange(1500, 0, 12),"
                " R.windowRange(1500, 1499, 12), R.windowRange(5, 2, 12)]);", tmp_path)
     assert r == [[738, 763], [0, 13], [1487, 1500], [0, 5]]
+
+
+def test_undo_history_keeps_the_latest_and_drops_one_by_one(tmp_path):
+    r = run_js("""
+var R = BcutReviewLogic, h = [];
+var a = {key:'A|1', file:'A', before:null, after:'pick', from:0};
+var b = {key:'B|2', file:'B', before:'maybe', after:'discard', from:1};
+h = R.recordChange(h, a); h = R.recordChange(h, b);
+var afterDrop = R.dropLast(h);
+var failed = R.dropChange(h, a);              // 저장에 실패한 표시만 기록에서 뺀다
+var many = []; for (var i = 0; i < 250; i++) many = R.recordChange(many, {key: String(i), file: 'x', before: null, after: 'pick', from: i});
+JSON.stringify({last: R.lastChange(h).file, dropLast: afterDrop.map(function(x){return x.file;}),
+  failed: failed.map(function(x){return x.file;}), empty: R.lastChange([]), keep: many.length, oldest: many[0].key,
+  original: h.length});""", tmp_path)
+    assert r == {"last": "B", "dropLast": ["A"], "failed": ["B"], "empty": None, "keep": 200, "oldest": "50",
+                 "original": 2}  # 새 목록을 만들 뿐 원래 기록은 바뀌지 않는다
+
+
+def test_migration_only_moves_photos_in_this_scan_without_a_mark(tmp_path):
+    migrate = LOGIC.parent / "migrate.js"
+    f = tmp_path / "t.js"
+    f.write_text("var window = this;\n" + migrate.read_text(encoding="utf-8") + """
+var rows = [{file:'A'},{file:'B'},{file:'C'}];
+var marks = [{file:'B', size:1, kind:'discard'}];
+JSON.stringify({todo: BcutMigrate.todo(['A','B','Z'], rows, marks), none: BcutMigrate.todo([], rows, marks),
+  all: BcutMigrate.todo(['A','B','C'], rows, [])});""", encoding="utf-8")
+    out = subprocess.run(["osascript", "-l", "JavaScript", str(f)], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    assert json.loads(out.stdout.strip()) == {"todo": ["A"], "none": [], "all": ["A", "B", "C"]}
