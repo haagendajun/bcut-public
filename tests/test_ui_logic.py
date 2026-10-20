@@ -150,3 +150,19 @@ JSON.stringify({ids: g.map(function(x){return x.id;}), ranks: g.map(function(x){
     assert r["files"] == [["A", "B"], ["C"], [], ["D"], ["E", "F"]]
     assert r["files2"] == [["B"], ["C"], ["A"], ["D"], ["E", "F"]]  # 남긴 컷은 1순위에서 빠져 '남긴 컷'으로
     assert r["order"] == ["A", "B", "C"] and r["order2"] == ["D", "E", "F"]
+
+
+def test_filter_by_my_marks_and_counts(tmp_path):
+    r = run_js(ROWS + """
+var marks = {A:'pick', C:'maybe', E:'discard'};
+function names(f){return L.filterRows(rows, {}, f).map(function(x){return x.file;});}
+var res = {pick: names({tier:'all', mark:'pick', marks:marks}), none: names({tier:'all', mark:'none', marks:marks}),
+  both: names({tier:'candidate', mark:'pick', marks:marks}), flaggedMaybe: names({tier:'flagged', mark:'maybe', marks:marks}),
+  nomark: names({tier:'all'}).length, counts: L.markCounts(rows, marks), noMarks: L.markCounts(rows, undefined)};
+JSON.stringify(res);
+""", tmp_path)
+    assert r["pick"] == ["A"] and r["none"] == ["B", "D", "F"]
+    assert r["both"] == ["A"] and r["flaggedMaybe"] == ["C"]
+    assert r["nomark"] == 6  # mark를 안 주면 걸러지지 않는다
+    assert r["counts"] == {"pick": 1, "maybe": 1, "discard": 1, "none": 3}
+    assert r["noMarks"]["none"] == 6

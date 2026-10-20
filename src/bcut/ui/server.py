@@ -49,6 +49,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from bcut import __version__
+from bcut.bridge.capture_one import CaptureOneBridge
 from bcut.organize import SortError, run_sort
 from bcut.report.csv_report import write_csv
 from bcut.scan import PhotoResult, count_by_status, list_photos, scan_folder
@@ -164,11 +165,15 @@ WEB_DIR = Path(__file__).parent / "web"
 STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "text/javascript"),
           "/review_logic.js": ("review_logic.js", "text/javascript"),
           "/review.js": ("review.js", "text/javascript"),
+          "/review_help.js": ("review_help.js", "text/javascript"),
           "/sort_view.js": ("sort_view.js", "text/javascript"),
           "/migrate.js": ("migrate.js", "text/javascript"),
           "/cloud_view.js": ("cloud_view.js", "text/javascript"),
           "/capture_view.js": ("capture_view.js", "text/javascript"),
           "/records_view.js": ("records_view.js", "text/javascript"),
+          "/finish_view.js": ("finish_view.js", "text/javascript"),
+          "/home_view.js": ("home_view.js", "text/javascript"),
+          "/filter_view.js": ("filter_view.js", "text/javascript"),
           "/style.css": ("style.css", "text/css")}
 
 
@@ -429,7 +434,9 @@ class _Handler(BaseHTTPRequestHandler):
         if method == "POST" and body is None:
             return
         state = self.state
-        status, payload = handle_records(state.marks, state.cfg.data_dir, method, path, body)
+        bridge = state.cfg.capture_bridge or CaptureOneBridge
+        status, payload = handle_records(state.marks, state.cfg.data_dir, method, path, body,
+                                         bridge)
         self._send(HTTPStatus(status), payload)
 
     def _capture(self, job: ScanJob) -> None:

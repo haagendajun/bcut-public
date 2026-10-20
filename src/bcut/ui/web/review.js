@@ -58,12 +58,12 @@
     var ordered = RL.order(rows), marks = RL.marksMap(markList);
     R = {rows: ordered, marks: marks, index: RL.resumeIndex(ordered, marks), seen: {}, skip: false, full: false,
          msg: '', history: [], final: false, faces: {}, boxes: false,
-         id: newId(), startedAt: Date.now(), finalAt: null};
+         id: newId(), startedAt: Date.now(), finalAt: null, help: false, tip: !window.BcutReviewHelp.seen()};
     see(); ctx.rerender();
   }
-  function exit(thenSort) {
+  function exit(then) {   // then: 'capture' | 'sort' | 없음. 고른 마무리 창을 바로 연다
     sendRecord(); R = null; forgetBlobs(); ctx.onClose();
-    if (thenSort) ctx.openSort();
+    if (then) ctx.finishWith(then);
   }
   function finish() { R.final = true; R.full = false; R.finalAt = Date.now(); ctx.rerender(); }   // 마치기 -> 최종 확인
   function go(delta) {
@@ -76,6 +76,7 @@
   /* 표시를 달고 바로 저장한다. 저장에 실패하면 되돌리고 그 사진으로 돌아온다 */
   function mark(pressed) {
     var row = R.rows[R.index], key = RL.markKey(row), before = R.marks[key] || null;
+    if (R.tip) { R.tip = false; window.BcutReviewHelp.remember(); }   // 한 번 써 봤으면 안내는 접는다
     var next = RL.nextMark(before, pressed), from = R.index;
     var change = {key: key, file: row.file, before: before, after: next, from: from};
     applyLocal(key, next); R.history = RL.recordChange(R.history, change);
@@ -108,7 +109,9 @@
     var k = String(e.key).toLowerCase();
     if ((e.metaKey || e.ctrlKey) && k === 'z' && !e.shiftKey) return undo();
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
-    if (R.final) { if (e.key === 'Escape') { exit(false); return true; } return false; }
+    if (R.help && (e.key === 'Escape' || e.key === '?')) { R.help = false; ctx.rerender(); return true; }
+    if (R.final) { if (e.key === 'Escape') { exit(); return true; } return false; }
+    if (e.key === '?') { R.help = true; ctx.rerender(); return true; }
     if (e.key === 'Escape') { finish(); return true; }
     if (e.key === 'ArrowRight') { go(1); return true; }
     if (e.key === 'ArrowLeft') { go(-1); return true; }
@@ -123,21 +126,29 @@
     var m = kind ? RL.MARKS[kind] : null;
     return ctx.el('div', 'lt-chip ' + (kind || 'none'), m ? m.icon + ' ' + m.label : '표시 없음');
   }
+  /* 켜짐/꺼짐이 한눈에 보이는 스위치 (글자는 기능 이름만) */
+  function toggle(label, on, fn) {
+    var b = ctx.el('button', 'lt-switch' + (on ? ' on' : '')); b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', String(!!on)); b.title = on ? '켜져 있어요. 누르면 꺼요' : '꺼져 있어요. 누르면 켜요';
+    b.appendChild(ctx.el('span', 'lt-knob')); b.appendChild(ctx.el('span', null, label));
+    b.addEventListener('click', fn); return b;
+  }
   function topBar() {
     var c = RL.counts(R.rows, R.marks), seen = Object.keys(R.seen).length;
     var top = ctx.el('div', 'lt-top');
     top.appendChild(ctx.el('strong', null, R.rows[R.index].file));
     top.appendChild(ctx.el('span', 'lt-progress', '셀렉 ' + c.pick + '장 · 본 사진 ' + seen + ' / 전체 ' + c.total));
-    var skip = ctx.el('button', null, '의심 컷 건너뛰기 ' + (R.skip ? '켜짐' : '꺼짐') + ' (D)');
-    skip.setAttribute('aria-pressed', String(R.skip));
-    skip.addEventListener('click', function () { R.skip = !R.skip; ctx.rerender(); });
-    var boxes = ctx.el('button', null, '얼굴 박스 ' + (R.boxes ? '켜짐' : '꺼짐') + ' (F)');
-    boxes.setAttribute('aria-pressed', String(R.boxes));
-    boxes.addEventListener('click', function () { R.boxes = !R.boxes; ctx.rerender(); });
+    var skip = toggle('의심 컷 건너뛰기 (D)', R.skip, function () { R.skip = !R.skip; ctx.rerender(); });
+    var boxes = toggle('얼굴 박스 (F)', R.boxes, function () { R.boxes = !R.boxes; ctx.rerender(); });
     var end = ctx.el('button', null, '마치기 (Esc)');
     end.addEventListener('click', finish);
-    top.appendChild(skip); top.appendChild(boxes); top.appendChild(end);
-    return top;
+    var help = ctx.el('button', null, '? 단축키'); help.addEventListener('click', function () { R.help = true; ctx.rerender(); });
+    top.appendChild(skip); top.appendChild(boxes); top.appendChild(help); top.appendChild(end);
+    var wrap = ctx.el('div', 'lt-head'); wrap.appendChild(top);
+    var bar = ctx.el('div', 'lt-bar'), fill = ctx.el('span');
+    fill.style.width = Math.round(100 * seen / Math.max(c.total, 1)) + '%'; bar.appendChild(fill);
+    bar.title = '본 사진 ' + seen + ' / 전체 ' + c.total; wrap.appendChild(bar);
+    return wrap;
   }
   /* 얼굴 정보는 크게 볼 때만 서버에서 받아 온다 (판정 때 저장하지 않은 값). 못 받아도 훑기는 계속된다 */
   function loadFaces(row) {
@@ -183,10 +194,23 @@
     place(); img.addEventListener('load', place);
     return layer;
   }
+  /* 마우스·트랙패드로도 표시할 수 있는 큰 버튼 (단축키와 같은 동작) */
+  function actions(current) {
+    var box = ctx.el('div', 'lt-acts');
+    [['pick', '★ 셀렉', 'S'], ['maybe', '? 보류', 'M'], ['discard', '✕ 버릴 컷', 'X']].forEach(function (a) {
+      var b = ctx.el('button', 'lt-act ' + a[0]); b.setAttribute('aria-pressed', String(current === a[0]));
+      b.appendChild(ctx.el('span', null, a[1])); b.appendChild(ctx.el('kbd', null, a[2]));
+      b.title = current === a[0] ? '다시 누르면 해제해요' : a[1].slice(2) + '로 표시하고 다음 사진으로 가요';
+      b.addEventListener('click', function () { mark(a[0]); });
+      box.appendChild(b);
+    });
+    return box;
+  }
   function panel(row, current, img) {
     var p = ctx.el('div', 'lt-panel');
     p.appendChild(ctx.el('div', 'lt-label', '지금 표시'));
     p.appendChild(chip(current));
+    p.appendChild(actions(current));
     p.appendChild(ctx.el('div', 'lt-label', '도구가 본 것'));
     var why = ctx.el('div', 'lt-why', L.explain(row, {})[0]);
     if (RL.isSuspect(row) && L.suspicion(row.confidence)) why.appendChild(ctx.el('small', null, '의심 정도 ' + L.suspicion(row.confidence)));
@@ -227,7 +251,7 @@
     var c = RL.counts(R.rows, R.marks);
     var o = ctx.el('div', 'lt'), box = ctx.el('div', 'lt-final');
     box.appendChild(ctx.el('h2', null, '훑기를 마쳤어요'));
-    box.appendChild(ctx.el('p', 'lt-muted', '이대로 폴더에 나누어 담아도 되는지 확인해 주세요. 원본은 건드리지 않고 사본만 만들어요.'));
+    box.appendChild(ctx.el('p', 'lt-muted', '표시한 장수를 확인해 주세요. 마무리해도 원본 사진은 건드리지 않아요.'));
     var stats = ctx.el('div', 'lt-stats');
     [['pick', '셀렉', c.pick], ['maybe', '보류', c.maybe], ['discard', '버릴 컷', c.discard], ['none', '표시 안 함', c.none]].forEach(function (x) {
       var s = ctx.el('div', 'lt-stat ' + x[0]); s.appendChild(ctx.el('b', null, String(x[2]))); s.appendChild(ctx.el('span', null, x[1]));
@@ -236,16 +260,18 @@
     box.appendChild(stats);
     var took = RL.sessionSummary(Object.keys(R.seen).length, R.startedAt, R.finalAt || Date.now()).text;
     if (took) box.appendChild(ctx.el('p', 'lt-muted', '이번에 ' + took + '.'));
-    box.appendChild(ctx.el('p', 'lt-muted', '셀렉은 "셀렉" 폴더에만, 보류는 "보류" 폴더에만 담겨요. 버릴 컷은 "버릴 것 같은 컷" 폴더에 함께 담겨요. 표시 안 한 사진은 도구가 본 대로 담겨요.'));
+    box.appendChild(ctx.el('p', 'lt-muted', '마무리 방법을 하나 골라 주세요. Capture One에 표시하면 원본과 폴더는 그대로예요. 폴더로 나누어 담으면 셀렉은 "셀렉" 폴더에만, 보류는 "보류" 폴더에만, 버릴 컷은 "버릴 것 같은 컷" 폴더에 함께 담겨요.'));
     if (R.msg) box.appendChild(ctx.el('div', 'lt-msg', R.msg));
     var row = ctx.el('div', 'lt-row');
     var more = ctx.el('button', null, '계속 훑기');
     more.addEventListener('click', function () { R.final = false; R.msg = ''; ctx.rerender(); });
-    var sort = ctx.el('button', 'primary', '나누어 담기…');
-    sort.addEventListener('click', function () { exit(true); });
+    var cap = ctx.el('button', 'primary', 'Capture One에 표시하기…');
+    cap.addEventListener('click', function () { exit('capture'); });
+    var sort = ctx.el('button', null, '폴더로 나누어 담기…');
+    sort.addEventListener('click', function () { exit('sort'); });
     var back = ctx.el('button', null, '요약으로 (Esc)');
-    back.addEventListener('click', function () { exit(false); });
-    row.appendChild(more); row.appendChild(sort); row.appendChild(back); box.appendChild(row);
+    back.addEventListener('click', function () { exit(); });
+    row.appendChild(cap); row.appendChild(sort); row.appendChild(more); row.appendChild(back); box.appendChild(row);
     box.appendChild(ctx.el('div', 'lt-keys', '⌘Z 방금 한 표시를 되돌리고 계속 훑어요'));
     o.appendChild(box);
     return o;
@@ -266,6 +292,8 @@
     main.appendChild(stage); main.appendChild(panel(row, current, img));
     o.appendChild(main); o.appendChild(filmstrip());
     o.appendChild(ctx.el('div', 'lt-keys', '← → 이동 · S 셀렉 · M 보류 · X 버릴 컷 (같은 키를 다시 누르면 해제) · ⌘Z 실행 취소 · D 의심 컷 건너뛰기 · F 얼굴 박스 · Z 100% 확대 · Esc 마치기'));
+    if (R.tip) o.appendChild(window.BcutReviewHelp.tip(ctx.el, function () { R.tip = false; ctx.rerender(); }));
+    if (R.help) o.appendChild(window.BcutReviewHelp.overlay(ctx.el, function () { R.help = false; ctx.rerender(); }));
     loadFaces(row);
     prefetch();
     return o;

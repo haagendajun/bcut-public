@@ -116,3 +116,56 @@ def test_module_has_no_delete_calls():
     text = Path(records.__file__).read_text(encoding="utf-8")
     for call in ("unlink(", "rmtree(", "os.remove(", "rmdir("):
         assert call not in text
+
+
+def test_trash_list_has_readable_titles_and_groups(data):
+    records.trash_event(data, KEY)
+    records.trash_capture(data, KEY, "sejun.cosessiondb")
+    items = {t["kind"]: t for t in list_records(data)["trash"]}
+    assert items["event"]["title"] == "행사 기록 (표시·훑기)"
+    assert items["capture"]["title"] == "Capture One 반영 기록 · sejun.cosessiondb"
+    assert items["event"]["group"] == items["capture"]["group"] == "260223 EVENT_A SJ"
+
+
+def test_old_trash_items_without_new_fields_still_get_titles(data):
+    tid = records.trash_event(data, KEY)
+    meta = data / "trash" / tid / "trash.json"
+    info = json.loads(meta.read_text(encoding="utf-8"))
+    for k in ("kind", "event", "event_name"):
+        info.pop(k)
+    meta.write_text(json.dumps(info), encoding="utf-8")
+    item = list_records(data)["trash"][0]
+    assert item["kind"] == "event" and item["title"] == "행사 기록 (표시·훑기)"
+
+
+def test_capture_record_can_be_undone_from_the_records_screen(tmp_path):
+    from test_capture_mark import Bridge
+
+    from bcut.ui.capture import handle as capture_handle
+    from bcut.ui.marks import event_key, file_size
+
+    folder = tmp_path / "행사"
+    folder.mkdir()
+    names = ["A.CR3", "B.CR3"]
+    for n in names:
+        (folder / n).write_bytes(n.encode() * 20)
+    store, data = MarkStore(tmp_path / "events"), tmp_path / "data"
+    for n in names:
+        store.set(event_key(folder), n, file_size(folder / n), "pick")
+    bridge = Bridge(folder, names, rating=0, color=0)
+    style = {"pick": {"rating": 5, "color": 4}}
+    capture_handle(store, folder, set(names), data,
+                   {"action": "apply", "catalog": "bcut-test", "style": style},
+                   make_bridge=lambda c: bridge)
+    call = {"event": event_key(folder), "doc": "bcut-test"}
+    st, out = handle(store, data, "POST", "/api/records/capture-rollback", call,
+                     make_bridge=lambda c: bridge)
+    assert st == 200 and out["mode"] == "dry-run" and out["strip_files"] == 2
+    assert bridge.variants["A.CR3"].rating == 5  # 미리보기는 바꾸지 않는다
+    st, out = handle(store, data, "POST", "/api/records/capture-rollback", {**call, "commit": True},
+                     make_bridge=lambda c: bridge)
+    assert st == 200 and out["ok"] and out["style"]["restored"]
+    assert (bridge.variants["A.CR3"].rating, bridge.variants["A.CR3"].color_tag) == (0, 0)
+    assert bridge.variants["A.CR3"].keywords == ("사용자키워드",)
+    bad = handle(store, data, "POST", "/api/records/capture-rollback", {"event": "..", "doc": ""})
+    assert bad[0] == 400

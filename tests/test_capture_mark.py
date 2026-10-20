@@ -301,16 +301,34 @@ def test_style_is_not_applied_when_keywords_were_not(world):
     assert out["style"]["applied"] is False
 
 
-def test_rollback_restores_before_values_but_keeps_what_the_user_changed(world):
+def test_rollback_restores_each_value_separately_and_keeps_what_the_user_changed(world):
     bridge = fresh(world)
     run(world, "apply", bridge=bridge, style=STYLE)
-    bridge.variants["B.CR3"] = replace(bridge.variants["B.CR3"], rating=2)  # 반영 뒤 사용자가 바꿈
+    # 반영 뒤 사용자가 별점을 바꿈
+    bridge.variants["B.CR3"] = replace(bridge.variants["B.CR3"], rating=2)
     status, out = run(world, "rollback", bridge=bridge, commit=True)
     v = bridge.variants
-    assert out["style"]["restored"] and out["style"]["kept_user_changed"] == 1
+    assert out["style"]["restored"] and out["style"]["restore"] == 4
     assert (v["A.CR3"].rating, v["A.CR3"].color_tag) == (0, 0)
     assert v["B.CR3"].rating == 2  # 사용자가 바꾼 별점은 그대로
+    assert v["B.CR3"].color_tag == 0  # 컬러 태그는 우리가 준 값 그대로라 되돌아간다
     assert v["A.CR3"].keywords == ("사용자키워드",)  # 키워드도 함께 되돌아간다
+
+
+def test_rollback_works_when_only_one_of_rating_and_color_is_left(world):
+    """실제 화면에서 본 문제: 별점은 이미 0인데 컬러 태그만 남은 사진이 되돌려지지 않았다."""
+    bridge = fresh(world)
+    run(world, "apply", bridge=bridge, style=STYLE)
+    # 별점은 이미 0이고 컬러 태그(초록·빨강)만 남은 상태
+    for n in ("A.CR3", "B.CR3"):
+        bridge.variants[n] = replace(bridge.variants[n], rating=0)
+    status, out = run(world, "rollback", bridge=bridge, commit=True)
+    st = out["style"]
+    assert st["restored"] and st["restore"] >= 3 and st["kept_user_changed"] == 0
+    rest = [x for n, x in bridge.variants.items() if n != "C.CR3"]
+    assert all(x.color_tag == 0 and x.rating == 0 for x in rest)
+    again = run(world, "rollback", bridge=bridge)[1]["style"]
+    assert again["restore"] == 0  # 다시 하면 할 일이 없다
 
 
 def test_second_apply_keeps_the_first_before_values(world):

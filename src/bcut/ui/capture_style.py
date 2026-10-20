@@ -4,8 +4,8 @@
 - 이미 별점·컬러 태그가 있는 사진은 건너뛴다. "덮어쓰기"를 켠 때만 바꾼다.
 - 주기 전에 **이전 값을 파일에 먼저 저장**하고(저장 못 하면 아무것도 안 바꾼다),
   준 뒤에 다시 읽어 확인한다.
-- 되돌리기는 현재 값이 우리가 준 값 그대로인 사진만 이전 값으로 돌린다.
-  그 사이 사용자가 바꾼 것은 건드리지 않는다.
+- 되돌리기는 **별점과 컬러 태그를 따로 보고**, 현재 값이 우리가 준 값 그대로인 것만 이전 값으로
+  돌린다. 이미 이전 값이면 건너뛰고, 그 사이 사용자가 바꾼 것은 건드리지 않는다.
 """
 
 from __future__ import annotations
@@ -167,32 +167,49 @@ def apply_style(bridge, plan: StylePlan, matched: dict[str, VariantInfo], out_di
     return payload
 
 
+def _decide(cur: int, applied: int | None, before: int) -> str:
+    """한 값(별점 또는 컬러 태그)을 어떻게 할지.
+    restore: 우리가 준 값 그대로라 되돌림, done: 이미 이전 값이라 할 일 없음,
+    kept: 그 사이 사용자가 바꿔서 그대로 둠, skip: 주지 않은 값."""
+    if applied is None:
+        return "skip"
+    if cur == applied:
+        return "restore"
+    return "done" if cur == before else "kept"
+
+
 def rollback_style(bridge, out_dir: Path, *, commit: bool) -> dict:
-    """우리가 준 값 그대로인 사진만 이전 값으로 돌린다. 그 사이 바뀐 것은 그대로 둔다."""
+    """우리가 준 값을 이전 값으로 돌린다. **별점과 컬러 태그를 따로** 본다. 우리가 준 값 그대로인
+    것만 돌리고, 이미 이전 값이면 건너뛰고, 그 사이 사용자가 바꾼 것은 그대로 둔다."""
     entries = _load(out_dir / FILENAME).get("entries", {})
     now_by_path = {v.path: v for v in bridge.list_variants()} if entries else {}
-    back_r: dict[str, list] = defaultdict(list)
-    back_c: dict[str, list] = defaultdict(list)
-    kept = restore = 0
+    back_r: dict[int, list] = defaultdict(list)
+    back_c: dict[int, list] = defaultdict(list)
+    photos = already = kept = 0
     for path, e in entries.items():
         v = now_by_path.get(path)
-        same = v is not None and (e["rating"] is None or v.rating == e["rating"]) and (
-            e["color"] is None or v.color_tag == e["color"])
-        if not same:
+        if v is None:
             kept += 1
             continue
-        restore += 1
         ref = (v.collection_id, v.variant_id)
-        if e["rating"] is not None:
+        dr = _decide(v.rating, e["rating"], e["before_rating"])
+        dc = _decide(v.color_tag, e["color"], e["before_color"])
+        if dr == "restore":
             back_r[e["before_rating"]].append(ref)
-        if e["color"] is not None:
+        if dc == "restore":
             back_c[e["before_color"]].append(ref)
+        if "restore" in (dr, dc):
+            photos += 1
+        elif "kept" in (dr, dc):
+            kept += 1
+        else:
+            already += 1
     done = False
-    if commit and restore:
+    if commit and photos:
         for groups, setter in ((back_r, bridge.set_rating), (back_c, bridge.set_color_tag)):
             for val, items in sorted(groups.items()):
                 for i in range(0, len(items), CHUNK):
                     setter(val, items[i:i + CHUNK])
         done = True
-    return {"restore": restore, "kept_user_changed": kept, "restored": done,
-            "has_record": bool(entries)}
+    return {"restore": photos, "already_restored": already, "kept_user_changed": kept,
+            "restored": done, "has_record": bool(entries)}

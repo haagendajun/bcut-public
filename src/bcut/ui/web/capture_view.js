@@ -25,7 +25,7 @@
          overwrite: !!st.overwrite, more: false};
     ctx.rerender();
   }
-  function close() { C = null; ctx.rerender(); }
+  function close() { if (C && C.busy) return; C = null; ctx.rerender(); }
   function stale() { C.res = null; C.error = null; ctx.rerender(); }   // 값을 바꾸면 미리보기를 다시 한다
 
   function chosenStyle() {
@@ -158,7 +158,11 @@
     var c = box(done ? 'ok' : 'info', done ? '✓ ' + r.stripped_files + '장에서 되돌렸어요' : '되돌리기 미리보기예요 · ' + r.strip_files + '장에서 이 앱이 붙인 키워드를 떼요');
     note(c, '직접 붙인 키워드와, 그 사이 직접 바꾼 별점·태그는 그대로 둬요.');
     var b = r.style;
-    if (b && b.has_record) note(c, '별점·컬러 태그: ' + b.restore + '장을 이전 값으로 ' + (b.restored ? '돌렸어요' : '돌려요') + (b.kept_user_changed ? ' (직접 바꾼 ' + b.kept_user_changed + '장은 그대로)' : ''));
+    if (b && b.has_record) {
+      note(c, '별점·컬러 태그: ' + b.restore + '장을 이전 값으로 ' + (b.restored ? '돌렸어요' : '돌려요') +
+        (b.already_restored ? ' · 이미 이전 값이라 할 일이 없는 사진 ' + b.already_restored + '장' : '') +
+        (b.kept_user_changed ? ' · 그 사이 직접 바꿔서 그대로 두는 사진 ' + b.kept_user_changed + '장' : ''));
+    }
     if (r.user_changed) note(c, '반영한 뒤 별점·태그를 바꾼 사진 ' + r.user_changed + '장은 그대로 둬요.');
     (r.violations || []).forEach(function (v) { note(c, '확인 실패: ' + v, 'err'); });
     p.appendChild(c);
@@ -212,5 +216,5 @@
     return modal;
   }
 
-  root.BcutCapture = {init: init, open: open, isOpen: isOpen, render: render};
+  root.BcutCapture = {init: init, open: open, isOpen: isOpen, render: render, close: close};
 })(window);

@@ -36,8 +36,16 @@
       if (!inTier(r, f.tier, rescued)) return false;
       if (f.reason && reasonsOf(r, rescued).indexOf(f.reason) < 0) return false;
       if (f.note && r.note !== f.note) return false;
+      if (f.mark && markOf(r, f.marks) !== f.mark) return false;   // 내 표시: pick | maybe | discard | none
       return true;
     });
+  }
+  /* 사용자가 단 표시. 없으면 'none' */
+  function markOf(row, marks) { return (marks && marks[row.file]) || 'none'; }
+  function markCounts(rows, marks) {
+    var c = {pick: 0, maybe: 0, discard: 0, none: 0};
+    rows.forEach(function (r) { c[markOf(r, marks)] += 1; });
+    return c;
   }
   function cmpName(a, b) { return a.file < b.file ? -1 : a.file > b.file ? 1 : 0; }
   function sortRows(rows, key) {
@@ -131,7 +139,7 @@
   function formatBytes(n) { return n >= 1e9 ? (n / 1e9).toFixed(1) + 'GB' : (n / 1e6).toFixed(0) + 'MB'; }
 
   var api = {STATUS: STATUS, NOTE: NOTE, NOTE_TIP: NOTE_TIP, REASON: REASON, TIERS: TIERS, tierOf: tierOf, inTier: inTier,
-             reasonsOf: reasonsOf, filterRows: filterRows, sortRows: sortRows, counts: counts,
+             reasonsOf: reasonsOf, filterRows: filterRows, markOf: markOf, markCounts: markCounts, sortRows: sortRows, counts: counts,
              rescuedNames: rescuedNames, step: step, badges: badges, explain: explain, suspicion: suspicion,
              planLines: planLines,
              formatBytes: formatBytes, isRescued: isRescued, priorityGroups: priorityGroups,

@@ -15,6 +15,9 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from bcut.bridge.capture_one import CaptureOneBridge
+from bcut.bridge.osascript import AppleScriptError, explain_error
+from bcut.ui.capture import undo
 from bcut.ui.cloud_plan import make_plan, read_event
 from bcut.ui.cloud_state import CloudState
 from bcut.ui.marks import KINDS, MarkStore
@@ -116,7 +119,8 @@ def _trash_dir(data_dir: Path) -> Path:
     return data_dir / "trash"
 
 
-def _move(items: list[tuple[Path, str]], data_dir: Path, label: str, now: Callable[[], str]) -> str:
+def _move(items: list[tuple[Path, str]], data_dir: Path, label: str, now: Callable[[], str],
+          info: dict | None = None) -> str:
     """(원래 경로, 휴지통 안 이름) 목록을 한 휴지통 항목으로 옮긴다."""
     if not items:
         raise RecordError("옮길 기록이 없다")
@@ -127,7 +131,7 @@ def _move(items: list[tuple[Path, str]], data_dir: Path, label: str, now: Callab
         entry = entry.with_name(f"{entry.name}_{n}")
         n += 1
     entry.mkdir(parents=True)
-    meta = {"label": label, "trashed_at": stamp, "items": []}
+    meta = {"label": label, "trashed_at": stamp, "items": [], **(info or {})}
     for src, name in items:
         os.replace(src, entry / name)
         meta["items"].append({"name": name, "original": str(src.relative_to(data_dir.resolve()))})
@@ -139,7 +143,8 @@ def trash_event(data_dir: Path, key: str, now: Callable[[], str] = _now) -> str:
     folder = _inside(data_dir / "events" / _name(key), data_dir)
     if not folder.is_dir():
         raise RecordError("없는 행사 기록")
-    return _move([(folder, "event")], data_dir, f"행사_{key}", now)
+    info = {"kind": "event", "event": key, "event_name": _event_name(folder)}
+    return _move([(folder, "event")], data_dir, f"행사_{key}", now, info)
 
 
 def trash_capture(data_dir: Path, key: str, sub: str, now: Callable[[], str] = _now) -> str:
@@ -149,19 +154,39 @@ def trash_capture(data_dir: Path, key: str, sub: str, now: Callable[[], str] = _
     files = [(folder / f, f) for f in BACKUP_FILES if (folder / f).is_file()]
     if not files:
         raise RecordError("없는 Capture One 반영 기록")
-    return _move(files, data_dir, f"CaptureOne_{key}_{sub or '기본'}", now)
+    ev = data_dir / "events" / key
+    info = {"kind": "capture", "event": key, "doc": sub,
+            "event_name": _event_name(ev) if ev.is_dir() else key,
+            "document": _load(folder / BACKUP_FILES[0]).get("catalog")}
+    return _move(files, data_dir, f"CaptureOne_{key}_{sub or '기본'}", now, info)
+
+
+def _trash_view(entry_name: str, meta: dict) -> dict:
+    """휴지통 항목을 화면용으로: 어느 행사의 무슨 기록인지 읽기 쉬운 이름."""
+    label = str(meta.get("label") or "")
+    kind = meta.get("kind") or ("capture" if label.startswith("CaptureOne_") else "event")
+    key = meta.get("event") or label.split("_", 1)[-1]
+    group = meta.get("event_name") or key
+    if kind == "capture":
+        title = "Capture One 반영 기록 · " + (meta.get("document") or "문서 이름 모름")
+    else:
+        title = "행사 기록 (표시·훑기)"
+    return {"id": entry_name, "kind": kind, "event": key, "group": group, "title": title,
+            "trashed_at": meta.get("trashed_at"), "items": len(meta.get("items", []))}
 
 
 def list_trash(data_dir: Path) -> list[dict]:
     root = _trash_dir(data_dir)
     out = []
     for entry in sorted(root.iterdir(), reverse=True) if root.is_dir() else []:
-        try:
-            meta = json.loads((entry / "trash.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        out.append({"id": entry.name, "label": meta.get("label"),
-                    "trashed_at": meta.get("trashed_at"), "items": len(meta.get("items", []))})
+        meta = _load(entry / "trash.json")
+        if meta:
+            out.append(_trash_view(entry.name, meta))
+    names = {t["event"]: t["group"] for t in out
+             if t["kind"] == "event" and t["group"] != t["event"]}
+    for t in out:  # 같은 행사의 다른 항목에서 읽기 쉬운 행사 이름을 가져온다
+        if t["group"] == t["event"] and t["event"] in names:
+            t["group"] = names[t["event"]]
     return out
 
 
@@ -186,8 +211,19 @@ def restore(data_dir: Path, trash_id: str) -> int:
     return len(plan)
 
 
-def handle(store: MarkStore, data_dir: Path, method: str, path: str,
-           body: dict | None) -> tuple[int, dict]:
+def capture_undo(data_dir: Path, body: dict, make_bridge) -> dict:
+    """기록 관리 화면에서 Capture One 반영을 되돌린다 (미리보기가 기본, commit이면 실제)."""
+    base = data_dir / "capture-one" / _name(body.get("event"))
+    sub = body.get("doc") or ""
+    folder = _inside(base / _name(sub) if sub else base, data_dir)
+    catalog = _load(folder / BACKUP_FILES[0]).get("catalog")
+    if not isinstance(catalog, str) or not catalog:
+        raise RecordError("이 반영 기록에서 카탈로그·세션 이름을 읽을 수 없다")
+    return undo(make_bridge(catalog), folder, commit=body.get("commit") is True)
+
+
+def handle(store: MarkStore, data_dir: Path, method: str, path: str, body: dict | None,
+           make_bridge=CaptureOneBridge) -> tuple[int, dict]:
     """서버가 부르는 짧은 함수. (HTTP 상태 번호, 응답). http를 쓰지 않아서 숫자로 준다."""
     body = body or {}
     try:
@@ -204,10 +240,14 @@ def handle(store: MarkStore, data_dir: Path, method: str, path: str,
                 doc = body.get("doc") or ""
                 return 200, {"id": trash_capture(data_dir, body.get("event"), doc)}
             return 400, {"error": "kind는 event 또는 capture여야 한다"}
+        if path == "/api/records/capture-rollback":
+            return 200, capture_undo(data_dir, body, make_bridge)
         if path == "/api/records/restore":
             return 200, {"restored": restore(data_dir, body.get("id"))}
     except RecordError as exc:
         return 400, {"error": str(exc)}
+    except AppleScriptError as exc:
+        return 502, {"error": explain_error(exc)}
     except OSError as exc:
         return 500, {"error": f"기록을 옮기지 못했다: {type(exc).__name__}"}
     return 404, {"error": "없는 주소"}

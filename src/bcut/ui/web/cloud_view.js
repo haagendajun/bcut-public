@@ -6,8 +6,8 @@
   var C = {st: null, open: false, busy: false, error: null};
   var EVERY_MS = 5 * 60 * 1000;
 
-  var LABEL = {need_consent: ['☁', '클라우드 저장 켜기'], need_login: ['🔑', '로그인 필요'],
-               synced: ['✓', '올림 완료'], pending: ['⏳', '대기'], error: ['⚠', '올리기 실패']};
+  var LABEL = {need_consent: ['☁', '클라우드 · 꺼짐'], need_login: ['🔑', '클라우드 · 로그인 필요'],
+               synced: ['✓', '클라우드 · 올림 완료'], pending: ['⏳', '클라우드 · 대기'], error: ['⚠', '클라우드 · 올리기 실패']};
 
   function init(c) {
     ctx = c;
@@ -35,7 +35,7 @@
   function chipText() {
     var s = C.st;
     if (!s) return ['☁', '클라우드'];
-    if (C.busy || s.syncing) return ['↻', '올리는 중…'];
+    if (C.busy || s.syncing) return ['↻', '클라우드 · 올리는 중…'];
     var l = LABEL[s.state] || LABEL.error;
     return [l[0], l[1] + (s.pending && s.state !== 'need_consent' ? ' ' + s.pending + '건' : '')];
   }
@@ -101,11 +101,12 @@
     if (C.error) p.appendChild(ctx.el('div', 'err', C.error));
     var done = ctx.el('button', 'ghost', '닫기'); done.addEventListener('click', close);
     p.appendChild(ctx.el('div', 'row')).appendChild(done);
+    var xb = ctx.el('button', 'ghost x-btn', '✕'); xb.type = 'button'; xb.setAttribute('aria-label', '닫기'); xb.addEventListener('click', close); p.appendChild(xb);
     modal.appendChild(p);
     modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
     return modal;
   }
   function isOpen() { return C.open; }
 
-  root.BcutCloud = {init: init, chip: chip, render: render, isOpen: isOpen, sync: sync};
+  root.BcutCloud = {init: init, chip: chip, render: render, isOpen: isOpen, sync: sync, close: close};
 })(window);

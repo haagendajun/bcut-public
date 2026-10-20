@@ -49,9 +49,7 @@
     var reveal = ctx.el('button', 'primary', 'Finder에서 열기');
     reveal.addEventListener('click', function () { ctx.api('POST', '/api/reveal', {path: r.result_dir}).catch(function (e) { M.error = e.message; ctx.rerender(); }); });
     var done = ctx.el('button', null, '닫기'); done.addEventListener('click', close);
-    var cap = ctx.el('button', null, 'Capture One에도 표시하기…');
-    cap.addEventListener('click', function () { document.dispatchEvent(new CustomEvent('bcut-open-capture')); });
-    row.appendChild(reveal); row.appendChild(cap); row.appendChild(done); p.appendChild(row);
+    row.appendChild(reveal); row.appendChild(done); p.appendChild(row);
   }
   function renderPlan(p) {
     var pl = M.plan;
@@ -83,9 +81,10 @@
     p.appendChild(ctx.el('h2', null, M.result ? '다 담았어요' : '폴더로 나누어 담기'));
     if (M.error) p.appendChild(ctx.el('div', 'err', M.error));
     if (M.result) renderDone(p); else renderPlan(p);
+    var xb = ctx.el('button', 'ghost x-btn', '✕'); xb.type = 'button'; xb.setAttribute('aria-label', '닫기'); xb.addEventListener('click', close); p.appendChild(xb);
     modal.appendChild(p);
     return modal;
   }
 
-  root.BcutSortView = {init: init, open: open, isOpen: isOpen, render: render};
+  root.BcutSortView = {init: init, open: open, isOpen: isOpen, render: render, close: close};
 })(window);

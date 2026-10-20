@@ -80,6 +80,15 @@ def work_dir(data_dir: Path, folder: Path, catalog: str) -> Path:
     return base / (re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", catalog).strip("._") or "doc")
 
 
+def undo(bridge, out_dir: Path, *, commit: bool) -> dict:
+    """이 앱이 붙인 키워드·별점·컬러 태그를 되돌린다 (commit이 아니면 미리보기).
+    되돌리기용 기록은 out_dir에 있다."""
+    session = _is_session(bridge)
+    back = rollback_style(bridge, out_dir, commit=commit)  # 별점·태그를 먼저 이전 값으로
+    res = run_rollback(bridge, out_dir / FILENAME, commit=commit)
+    return {**_rollback_payload(res, "rollback"), "session": session, "style": back}
+
+
 def _is_session(bridge) -> bool:
     """세션이면 사진 읽기 방식을 바꾸고 True. 종류를 알 수 없는 창구(시험용)는 카탈로그로 본다."""
     kind = getattr(bridge, "document_kind", None)
@@ -107,10 +116,7 @@ def handle(store: MarkStore, folder: Path, names: set[str], data_dir: Path, body
     try:
         session = _is_session(bridge)
         if action == "rollback":
-            commit = body.get("commit") is True
-            back = rollback_style(bridge, out_dir, commit=commit)  # 별점·태그를 먼저 이전 값으로
-            res = run_rollback(bridge, out_dir / FILENAME, commit=commit)
-            return 200, {**_rollback_payload(res, action), "session": session, "style": back}
+            return 200, undo(bridge, out_dir, commit=body.get("commit") is True)
         marks = list_marks(store, folder, names)["marks"]
         plan = build_plan(marks)
         res = run_apply(
