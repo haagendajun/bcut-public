@@ -31,7 +31,7 @@ table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:5px 8px;
 <section><h2>2. 올라간 데이터 보기</h2>
 <button id="load" class="ghost" disabled>새로 읽기</button>
 <div id="summary" class="mut"></div>
-<table><thead><tr><th>사진</th><th>등급</th><th>문제</th><th>의심</th><th>남기기</th></tr></thead><tbody id="rows"></tbody></table></section>
+<table><thead><tr><th>사진</th><th>등급</th><th>문제</th><th>의심</th><th>셀렉</th></tr></thead><tbody id="rows"></tbody></table></section>
 
 <section><h2>3. 막혀야 정상인 동작</h2>
 <p class="mut">아래 버튼은 <b>오류가 나야 성공</b>입니다 (삭제·수정은 막아 두었습니다).</p>
@@ -85,18 +85,18 @@ table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:5px 8px;
       var ids=ph.map(function(p){return p.id});
       var sc=await chk('검사',db.from('scans').select('id,started_at').order('started_at',{ascending:false}));
       var vd=ids.length?await chk('판정',db.from('verdicts').select('photo_id,tier,reasons,suspicion,scan_id,scans(started_at)').in('photo_id',ids)):[];
-      var km=ids.length?await chk('남기기',db.from('keep_marks').select('id,photo_id').in('photo_id',ids).is('cancelled_at',null)):[];
+      var km=ids.length?await chk('셀렉',db.from('photo_marks').select('id,photo_id').eq('kind','pick').in('photo_id',ids).is('cancelled_at',null)):[];
       var latest={};vd.forEach(function(v){var t=v.scans&&v.scans.started_at;if(!latest[v.photo_id]||t>latest[v.photo_id].t)latest[v.photo_id]={v:v,t:t}});
       var kept={};km.forEach(function(k){kept[k.photo_id]=k.id});
-      $('summary').textContent='사진 '+ph.length+'장 · 검사 '+sc.length+'건 · 판정 '+vd.length+'건 · 남긴 컷 '+km.length+'장';
+      $('summary').textContent='사진 '+ph.length+'장 · 검사 '+sc.length+'건 · 판정 '+vd.length+'건 · 셀렉 '+km.length+'장';
       var tb=$('rows');tb.replaceChildren();
       ph.forEach(function(p){
         var l=latest[p.id],tr=document.createElement('tr');
         [p.file_name,l?l.v.tier:'-',l?l.v.reasons.join(', ')||'-':'-',l&&l.v.suspicion!=null?l.v.suspicion:'-'].forEach(function(t){var td=document.createElement('td');td.textContent=t;tr.appendChild(td)});
-        var td=document.createElement('td'),b=document.createElement('button');b.className='ghost';b.textContent=kept[p.id]?'남김 (취소하기)':'남기기';
+        var td=document.createElement('td'),b=document.createElement('button');b.className='ghost';b.textContent=kept[p.id]?'셀렉됨 (취소하기)':'셀렉';
         b.onclick=async function(){
-          var r=kept[p.id]?await db.from('keep_marks').update({cancelled_at:new Date().toISOString()}).eq('id',kept[p.id]):await db.from('keep_marks').insert({owner_id:uid,photo_id:p.id});
-          log(r.error?'✗ 남기기 변경 실패: '+r.error.message:'✓ '+p.file_name+(kept[p.id]?' 남기기 취소':' 남기기'),r.error?'bad':'ok');load();
+          var r=kept[p.id]?await db.from('photo_marks').update({cancelled_at:new Date().toISOString()}).eq('id',kept[p.id]):await db.from('photo_marks').insert({owner_id:uid,photo_id:p.id,kind:'pick'});
+          log(r.error?'✗ 셀렉 변경 실패: '+r.error.message:'✓ '+p.file_name+(kept[p.id]?' 셀렉 취소':' 셀렉'),r.error?'bad':'ok');load();
         };
         td.appendChild(b);tr.appendChild(td);tb.appendChild(tr);
       });
