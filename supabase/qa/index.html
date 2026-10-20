@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bcut DB QA</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mut:#6b7280;--ok:#15803d;--bad:#b91c1c;--acc:#2563eb;--bd:#e5e7eb}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1f26;--tx:#e8eaed;--mut:#9aa3af;--ok:#4ade80;--bad:#f87171;--acc:#60a5fa;--bd:#2a313b}}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,system-ui,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 16px}
+section{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin:12px 0}
+h2{font-size:15px;margin:0 0 8px}
+input{font:inherit;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);margin-right:6px}
+button{font:inherit;padding:8px 12px;border:0;border-radius:8px;background:var(--acc);color:#fff;cursor:pointer;margin:2px 4px 2px 0}
+button.ghost{background:transparent;color:var(--acc);border:1px solid var(--bd)}
+button:disabled{opacity:.4;cursor:default}
+table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:5px 8px;border-bottom:1px solid var(--bd);font-size:14px}
+#log{white-space:pre-wrap;font:13px/1.5 ui-monospace,Menlo,monospace;max-height:280px;overflow:auto}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.mut{color:var(--mut)}
+</style></head><body><main>
+<h1>bcut 데이터베이스 QA</h1>
+<p class="sub">내 컴퓨터에서만 열리는 시험 화면입니다. 사진은 올라가지 않고, 이름·판정 같은 글자 정보만 슈파베이스에 저장됩니다.</p>
+
+<section><h2>0. 로그인</h2>
+<div id="loggedout"><input id="email" type="email" placeholder="이메일" autocomplete="username"><input id="pw" type="password" placeholder="비밀번호" autocomplete="current-password"><button id="login">로그인</button></div>
+<div id="loggedin" hidden><span id="who"></span> <button class="ghost" id="logout">로그아웃</button></div></section>
+
+<section><h2>1. 테스트 데이터 넣기</h2>
+<p class="mut">행사 "QA_테스트행사"와 사진 5장, 판정 5건을 올립니다. <b>두 번 눌러도</b> 행사·사진은 늘지 않아야 하고(중복 무시), 검사는 눌렀을 때마다 1건씩 생깁니다.</p>
+<button id="seed" disabled>테스트 데이터 올리기</button></section>
+
+<section><h2>2. 올라간 데이터 보기</h2>
+<button id="load" class="ghost" disabled>새로 읽기</button>
+<div id="summary" class="mut"></div>
+<table><thead><tr><th>사진</th><th>등급</th><th>문제</th><th>의심</th><th>남기기</th></tr></thead><tbody id="rows"></tbody></table></section>
+
+<section><h2>3. 막혀야 정상인 동작</h2>
+<p class="mut">아래 버튼은 <b>오류가 나야 성공</b>입니다 (삭제·수정은 막아 두었습니다).</p>
+<button id="del" class="ghost" disabled>사진 삭제 시도</button>
+<button id="upd" class="ghost" disabled>사진 이름 수정 시도</button>
+<button id="bad" class="ghost" disabled>잘못된 등급 넣기</button></section>
+
+<section><h2>기록</h2><div id="log"></div></section>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(function(){
+  var URL_='https://fsngkxbhgtmzpjoasmvn.supabase.co', KEY='sb_publishable_8N9h_o7zZyz2BouF-mb97A_ItbSOfuP';
+  var db=supabase.createClient(URL_,KEY,{auth:{persistSession:false}});
+  var $=function(i){return document.getElementById(i)}, uid=null;
+  function log(t,c){var d=document.createElement('div');d.textContent=new Date().toLocaleTimeString()+'  '+t;if(c)d.className=c;$('log').prepend(d)}
+  function ui(on){['seed','load','del','upd','bad'].forEach(function(i){$(i).disabled=!on});$('loggedout').hidden=on;$('loggedin').hidden=!on}
+  async function chk(label,p){var r=await p;if(r.error){log('✗ '+label+': '+r.error.message,'bad');throw r.error}return r.data}
+
+  $('login').onclick=async function(){
+    var r=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('pw').value});
+    $('pw').value='';
+    if(r.error){log('✗ 로그인 실패: '+r.error.message,'bad');return}
+    uid=r.data.user.id;$('who').textContent=r.data.user.email+' 로 로그인됨';ui(true);log('✓ 로그인 성공','ok');
+    var p=await db.from('profiles').select('display_name').eq('id',uid).maybeSingle();
+    log(p.data?'✓ 내 프로필 있음 ('+p.data.display_name+')':'✗ 프로필이 없어요 (계정 생성 트리거 문제)',p.data?'ok':'bad');
+    await db.from('profiles').update({last_sign_in_at:new Date().toISOString()}).eq('id',uid);
+    load();
+  };
+  $('logout').onclick=async function(){await db.auth.signOut();uid=null;ui(false);$('rows').replaceChildren();log('로그아웃')};
+
+  $('seed').onclick=async function(){
+    try{
+      await chk('행사',db.from('events').upsert({owner_id:uid,name:'QA_테스트행사',last_scan_folder:'/QA/테스트'},{onConflict:'owner_id,name',ignoreDuplicates:true}));
+      var ev=(await chk('행사 읽기',db.from('events').select('id').eq('name','QA_테스트행사').single())).id;
+      var names=['QA_0001.CR3','QA_0002.CR3','QA_0003.CR3','QA_0004.CR3','QA_0005.CR3'];
+      await chk('사진',db.from('photos').upsert(names.map(function(n,i){return{owner_id:uid,event_id:ev,file_name:n,file_size:1000+i}}),{onConflict:'event_id,file_name,file_size',ignoreDuplicates:true}));
+      var ph=await chk('사진 읽기',db.from('photos').select('id,file_name').eq('event_id',ev));
+      var by={};ph.forEach(function(p){by[p.file_name]=p.id});
+      var scan=crypto.randomUUID();
+      await chk('검사',db.from('scans').insert({id:scan,owner_id:uid,event_id:ev,folder_path:'/QA/테스트',tool_version:'qa',config:{eyes:{candidate:0.134}},photo_count:5,counts:{candidate:2,review:1,normal:2},started_at:new Date().toISOString(),finished_at:new Date().toISOString()}));
+      var V=[['QA_0001.CR3','candidate',['eyes_closed'],0.92],['QA_0002.CR3','candidate',['eyes_closed','blur'],0.81],['QA_0003.CR3','review',['exposure'],0.35],['QA_0004.CR3','normal',[],0.05],['QA_0005.CR3','normal',[],0.1]];
+      await chk('판정',db.from('verdicts').insert(V.map(function(v){return{owner_id:uid,scan_id:scan,photo_id:by[v[0]],tier:v[1],reasons:v[2],suspicion:v[3],face_count:2,details:{note:'qa'}}})));
+      log('✓ 올리기 완료 (검사 번호 '+scan.slice(0,8)+'…)','ok');
+    }catch(e){} load();
+  };
+
+  async function load(){
+    try{
+      var ph=await chk('사진',db.from('photos').select('id,file_name,events!inner(name)').eq('events.name','QA_테스트행사').order('file_name'));
+      var ids=ph.map(function(p){return p.id});
+      var sc=await chk('검사',db.from('scans').select('id,started_at').order('started_at',{ascending:false}));
+      var vd=ids.length?await chk('판정',db.from('verdicts').select('photo_id,tier,reasons,suspicion,scan_id,scans(started_at)').in('photo_id',ids)):[];
+      var km=ids.length?await chk('남기기',db.from('keep_marks').select('id,photo_id').in('photo_id',ids).is('cancelled_at',null)):[];
+      var latest={};vd.forEach(function(v){var t=v.scans&&v.scans.started_at;if(!latest[v.photo_id]||t>latest[v.photo_id].t)latest[v.photo_id]={v:v,t:t}});
+      var kept={};km.forEach(function(k){kept[k.photo_id]=k.id});
+      $('summary').textContent='사진 '+ph.length+'장 · 검사 '+sc.length+'건 · 판정 '+vd.length+'건 · 남긴 컷 '+km.length+'장';
+      var tb=$('rows');tb.replaceChildren();
+      ph.forEach(function(p){
+        var l=latest[p.id],tr=document.createElement('tr');
+        [p.file_name,l?l.v.tier:'-',l?l.v.reasons.join(', ')||'-':'-',l&&l.v.suspicion!=null?l.v.suspicion:'-'].forEach(function(t){var td=document.createElement('td');td.textContent=t;tr.appendChild(td)});
+        var td=document.createElement('td'),b=document.createElement('button');b.className='ghost';b.textContent=kept[p.id]?'남김 (취소하기)':'남기기';
+        b.onclick=async function(){
+          var r=kept[p.id]?await db.from('keep_marks').update({cancelled_at:new Date().toISOString()}).eq('id',kept[p.id]):await db.from('keep_marks').insert({owner_id:uid,photo_id:p.id});
+          log(r.error?'✗ 남기기 변경 실패: '+r.error.message:'✓ '+p.file_name+(kept[p.id]?' 남기기 취소':' 남기기'),r.error?'bad':'ok');load();
+        };
+        td.appendChild(b);tr.appendChild(td);tb.appendChild(tr);
+      });
+    }catch(e){}
+  }
+  $('load').onclick=load;
+
+  function expectBlocked(label,r){var blocked=!!r.error||(r.data&&r.data.length===0)||r.count===0;
+    log((blocked?'✓ 막힘(정상): ':'✗ 막히지 않음(문제!): ')+label+(r.error?' → '+r.error.message:''),blocked?'ok':'bad')}
+  $('del').onclick=async function(){expectBlocked('사진 삭제',await db.from('photos').delete().like('file_name','QA_%').select())};
+  $('upd').onclick=async function(){expectBlocked('사진 이름 수정',await db.from('photos').update({file_name:'hacked'}).like('file_name','QA_%').select())};
+  $('bad').onclick=async function(){
+    var p=await db.from('photos').select('id').limit(1).maybeSingle(),s=await db.from('scans').select('id').limit(1).maybeSingle();
+    if(!p.data||!s.data){log('먼저 1번으로 데이터를 올려 주세요');return}
+    expectBlocked('잘못된 등급("bogus") 저장',await db.from('verdicts').insert({owner_id:uid,scan_id:s.data.id,photo_id:p.data.id,tier:'bogus'}).select());
+  };
+  log('준비됨. 위에서 로그인하세요.','mut');
+})();
+</script></main></body></html>
