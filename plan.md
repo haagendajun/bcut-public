@@ -14,6 +14,10 @@
 | `ui/web/sort_view.js` | 나누어 담기 창에 "Capture One에도 표시하기…" 버튼 |
 백업 위치: `<data-dir>/capture-one/<행사 키>/bcut-backup.json`, 카탈로그 백업은 같은 폴더의 `catalog-backups/`.
 
+**S6-B 세션 지원:** `CaptureOneBridge.document_kind()`(`kind of doc`)로 문서 종류를 확인하고, 세션이면 `bridge.session = True`로 `SESSION_LIST_SCRIPT`(모든 컬렉션을 폴더 먼저·하위까지 읽음)를 쓴다. 세션이면 `run_apply(backups_dir=None)`로 카탈로그 백업(`backup now`는 카탈로그 전용)을 생략한다. 컬렉션 종류 목록에 세션 폴더가 없어(sdef) 폴더 구분을 가정하지 않고 전부 읽는다. 실제 세션 검증은 사람 QA.
+
+**S6-C 별점·컬러 태그:** `ui/capture_style.py`(순수 계획 + 쓰기·기록·확인·되돌리기), 브릿지 `set_rating`·`set_color_tag`(스크립트는 값 하나를 변형 여러 개에 정함, 200장씩). 요청 `style: {pick|maybe|discard: {rating, color}}`, `overwrite`. 키워드가 모두 붙은 뒤에만 쓰고(`res.ok`), 이전 값은 `bcut-style-backup.json`에 먼저 저장(첫 이전 값 보존). 되돌리기는 별점·태그를 먼저 돌린 뒤 키워드를 뗀다. 컬러 태그 번호: 빨강=1(실기 확인), 2~7은 Capture One 순서(가정).
+
 ## 3. 단계
 1. `capture.py` + 서버 길 + 시험. 2. 화면. 3. 문서·QA.
 

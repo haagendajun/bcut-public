@@ -66,6 +66,94 @@ LIST_SCRIPT = f"""on run argv
 end run
 """
 
+# 문서 종류: "catalog" 또는 "session" (지정한 문서가 열려 있을 때만 동작)
+KIND_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+    return (kind of doc) as text
+  end tell
+end run
+"""
+
+# 세션의 사진 모으기 (읽기). 세션은 컬렉션 종류가 카탈로그와 달라서(폴더가 Capture·Selects 등),
+# 폴더 컬렉션을 먼저, 나머지를 그다음에 읽고 하위 컬렉션까지 내려간다. 같은 경로는 파이썬에서
+# 한 번만 센다. 출력 한 줄의 모양은 LIST_SCRIPT와 같다. (실제 세션에서의 확인은 사람 QA)
+SESSION_LIST_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+    set out to ""
+    repeat with pass from 1 to 2
+      repeat with c in (every collection of doc)
+        set isFolder to ((kind of c) is catalog folder)
+        if (pass is 1 and isFolder) or (pass is 2 and not isFolder) then
+          set out to out & my readCollection(c)
+        end if
+      end repeat
+    end repeat
+    return out
+  end tell
+end run
+
+on readCollection(c)
+  set out to ""
+  tell application "Capture One"
+    try
+      set ims to images of c
+      repeat with i from 1 to (count of ims)
+        set im to item i of ims
+        set v to variant 1 of im
+        set kws to ""
+        try
+          set names to name of every keyword of v
+          repeat with n in names
+            if n is not missing value then set kws to kws & (n as text) & "{KEYWORD_SEP}"
+          end repeat
+        end try
+        set out to out & (path of im) & "{FIELD_SEP}" & (name of im) & "{FIELD_SEP}"
+        set out to out & (rating of v) & "{FIELD_SEP}" & (color tag of v) & "{FIELD_SEP}"
+        set out to out & kws & "{FIELD_SEP}" & (id of c) & "{FIELD_SEP}" & (id of v) & linefeed
+      end repeat
+    end try
+    try
+      repeat with sub in (every collection of c)
+        set out to out & my readCollection(sub)
+      end repeat
+    end try
+  end tell
+  return out
+end readCollection
+"""
+
+
+# 별점·컬러 태그 쓰기 (사용자가 고른 값만, ADR-0011).
+# 인자: 카탈로그, 값(정수), "컬렉션id|변형id" 목록.
+# 키워드와 달리 값 하나를 변형 여러 개에 직접 정한다. 이전 값은 호출하는 쪽이 먼저 저장해 둔다.
+_SET_BODY = f"""    set val to (item 2 of argv) as integer
+    repeat with i from 3 to (count of argv)
+      set AppleScript's text item delimiters to "{KEYWORD_SEP}"
+      set parts to text items of (item i of argv)
+      set AppleScript's text item delimiters to ""
+      set v to (variant id (item 2 of parts) of collection id (item 1 of parts) of doc)
+      set PROP of v to val
+    end repeat
+    return ((count of argv) - 2) as text
+"""
+
+SET_RATING_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+{_SET_BODY.replace("PROP", "rating")}  end tell
+end run
+"""
+
+SET_COLOR_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+{_SET_BODY.replace("PROP", "color tag")}  end tell
+end run
+"""
+
+
 KEYWORD_SCRIPT = f"""on run argv
   tell application "Capture One"
 {_GUARD}
@@ -189,6 +277,7 @@ class CaptureOneBridge:
         if not catalog_name.strip():
             raise ValueError("카탈로그 이름이 비어 있다")
         self.catalog_name = catalog_name
+        self.session = False  # 세션이면 True: 사진 읽기 방식이 달라진다 (document_kind로 확인)
         self._run = run
         self._runner = runner
         self._timeout = timeout
@@ -210,8 +299,12 @@ class CaptureOneBridge:
         """열려 있는 카탈로그 이름을 돌려준다. 지정한 카탈로그가 아니면 AppleScriptError."""
         return self._call(PING_SCRIPT)
 
+    def document_kind(self) -> str:
+        """열려 있는 문서가 "catalog"인지 "session"인지. 지정한 문서가 아니면 AppleScriptError."""
+        return self._call(KIND_SCRIPT).strip().lower()
+
     def list_variants(self) -> list[VariantInfo]:
-        return parse_variants(self._call(LIST_SCRIPT))
+        return parse_variants(self._call(SESSION_LIST_SCRIPT if self.session else LIST_SCRIPT))
 
     def backup_catalog(self, location: str | Path) -> None:
         """Capture One의 카탈로그 백업을 `location` 폴더에 만든다. 사진 파일은 건드리지 않는다."""
@@ -228,6 +321,20 @@ class CaptureOneBridge:
             return 0
         args = [self.catalog_name, keyword, *[f"{c}{KEYWORD_SEP}{v}" for c, v in refs]]
         return int(self._run(APPLY_KEYWORD_SCRIPT, args, **self._kwargs()))
+
+    def set_rating(self, value: int, refs: list[tuple[str, str]]) -> int:
+        """별점을 변형 여러 개에 정한다 (사용자가 고른 값만). refs는 (컬렉션 id, 변형 id)."""
+        return self._set(SET_RATING_SCRIPT, value, refs)
+
+    def set_color_tag(self, value: int, refs: list[tuple[str, str]]) -> int:
+        """컬러 태그를 변형 여러 개에 정한다 (사용자가 고른 값만)."""
+        return self._set(SET_COLOR_SCRIPT, value, refs)
+
+    def _set(self, script: str, value: int, refs: list[tuple[str, str]]) -> int:
+        if not refs:
+            return 0
+        args = [self.catalog_name, str(int(value)), *[f"{c}{KEYWORD_SEP}{v}" for c, v in refs]]
+        return int(self._run(script, args, **self._kwargs()))
 
     def strip_keyword(self, keyword: str, refs: list[tuple[str, str]]) -> int:
         """키워드 하나를 변형들에서 뗀다 (이미 없는 것은 세지 않는다). 별점·태그는 그대로.
