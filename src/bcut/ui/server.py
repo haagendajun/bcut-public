@@ -16,7 +16,8 @@
 
 API (모두 JSON, 토큰 필요):
   GET  /api/health                      -> {ok, version}
-  GET  /  /app.js  /logic.js  /style.css  -> 화면 파일 (index에 토큰을 넣어 준다)
+  GET  /  /app.js  /logic.js  /review_logic.js  /review.js  /sort_view.js  /migrate.js  /style.css
+                                        -> 화면 파일 (토큰 주입)
   POST /api/choose-folder               -> {folder|null}  (맥의 폴더 선택 창)
   POST /api/reveal {path}               -> Finder에서 열기 (이 서버가 만든 정리 결과 폴더만)
   POST /api/scan   {folder}             -> {job}  (백그라운드 분석 시작)
@@ -25,11 +26,16 @@ API (모두 JSON, 토큰 필요):
   GET  /api/jobs/<job>/thumb/<파일>      -> JPEG 썸네일
   GET  /api/jobs/<job>/photo/<파일>?size=view|full -> 사진 (내장 JPEG)
   POST /api/jobs/<job>/sort {rescue, commit, out, by_reason} -> 미리보기 또는 정리 결과
+  GET  /api/jobs/<job>/marks            -> {marks: [{file, size, kind}], broken}  (셀렉·보류·버릴컷)
+  POST /api/jobs/<job>/marks {file, kind|null} -> {file, size, kind}  (표시, 앞 표시는 취소)
+  GET  /api/jobs/<job>/faces/<파일>      -> {w, h, faces: [{box, area, eyes}]}  (얼굴·눈 위치)
+  GET  /api/cloud/status · POST /api/cloud/consent|login|logout|sync -> 올리기 (cloud_service)
+  POST /api/jobs/<job>/capture-one {catalog, action} -> Capture One에 표시 (미리보기·반영·되돌리기)
+  POST /api/jobs/<job>/review {id, started_at, ended_at, seen, pick, maybe, discard} -> 훑기 기록
 """
 
 from __future__ import annotations
 
-import io
 import json
 import re
 import secrets
@@ -45,6 +51,20 @@ from bcut import __version__
 from bcut.organize import SortError, run_sort
 from bcut.report.csv_report import write_csv
 from bcut.scan import PhotoResult, count_by_status, list_photos, scan_folder
+from bcut.ui.capture import handle as handle_capture
+from bcut.ui.cloud import SupabaseClient
+from bcut.ui.cloud_service import CloudService
+from bcut.ui.cloud_service import handle as handle_cloud
+from bcut.ui.cloud_state import MacKeychain
+from bcut.ui.faces import face_info
+from bcut.ui.marks import MarkStore, file_size, list_marks, post_mark
+from bcut.ui.photos import (  # noqa: F401  rotate_*는 기존 이름으로도 쓰이도록 다시 내보낸다
+    default_orientation,
+    default_read_photo,
+    rotate_image,
+    rotate_jpeg,
+)
+from bcut.ui.reviews import ReviewStore, post_review
 
 LOOPBACK = "127.0.0.1"
 MAX_BODY = 1_000_000  # 요청 본문 상한 (바이트)
@@ -82,6 +102,7 @@ class ScanJob:
     error: str | None = None
     started_at: float = field(default_factory=time.time)
     thumbs: dict[str, bytes] = field(default_factory=dict)  # 회전을 바로잡은 썸네일 모음
+    faces: dict[str, dict] = field(default_factory=dict)  # 불러온 얼굴 정보 (한 번만 계산)
 
     def by_name(self) -> dict[str, PhotoResult]:
         return {r.file: r for r in self.results}
@@ -100,8 +121,11 @@ class ServerConfig:
     choose_folder: Callable[[], str | None] | None = None  # 폴더 선택 창 (없으면 맥 기본 창)
     # 사진의 회전 정보 (rawpy flip 값). 없으면 파일에서 읽는다
     orientation: Callable[[Path], int] | None = None
+    faces: Callable[[Path, int], dict] | None = None  # (경로, 회전) -> 얼굴 정보. 없으면 인식
     reveal: Callable[[Path], None] | None = None  # Finder에서 열기 (없으면 `open`)
     workers: int | None = None
+    cloud: CloudService | None = None  # 올리기 서비스 (없으면 실제 슈파베이스용을 만든다)
+    capture_bridge: Callable | None = None  # 카탈로그 이름 -> Capture One 창구 (시험용)
 
 
 def _row(r: PhotoResult) -> dict:
@@ -111,52 +135,6 @@ def _row(r: PhotoResult) -> dict:
         "exposure": r.exposure_kind, "sharpness": r.sharpness_kind,
         "sharp_best": r.sharpness_best, "sharp_face": r.sharpness_face, "error": r.error,
     }
-
-
-def default_orientation(path: Path) -> int:
-    """카메라가 기록한 회전 정보. rawpy flip 값(0 없음, 3 180도,
-    5 반시계 90도, 6 시계 90도). 못 읽으면 0."""
-    try:
-        import rawpy
-
-        with rawpy.imread(str(path)) as raw:
-            return int(raw.sizes.flip)
-    except Exception:  # noqa: BLE001  회전을 못 읽어도 사진은 보여 준다
-        return 0
-
-
-def rotate_image(img, flip: int):
-    """flip 값대로 돌려 똑바로 세운다 (세로 사진이 눕지 않게). 실제 사진으로 방향 확인함."""
-    if flip == 3:
-        return img.rotate(180, expand=True)
-    if flip == 5:
-        return img.rotate(90, expand=True)
-    if flip == 6:
-        return img.rotate(-90, expand=True)
-    return img
-
-
-def rotate_jpeg(data: bytes, flip: int) -> bytes:
-    if flip not in (3, 5, 6):
-        return data
-    from PIL import Image
-
-    with Image.open(io.BytesIO(data)) as im:
-        out = io.BytesIO()
-        rotate_image(im.convert("RGB"), flip).save(out, "JPEG", quality=80)
-    return out.getvalue()
-
-
-def default_read_photo(path: Path, size: str) -> bytes:
-    from bcut.imageio import read_embedded_jpeg
-
-    width = 2048
-    if size == "full":
-        width = read_embedded_jpeg(path).full_width
-    img = rotate_image(read_embedded_jpeg(path, width=width).image, default_orientation(path))
-    buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=88)
-    return buf.getvalue()
 
 
 def default_choose_folder() -> str | None:
@@ -182,6 +160,12 @@ def default_reveal(path: Path) -> None:
 
 WEB_DIR = Path(__file__).parent / "web"
 STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "text/javascript"),
+          "/review_logic.js": ("review_logic.js", "text/javascript"),
+          "/review.js": ("review.js", "text/javascript"),
+          "/sort_view.js": ("sort_view.js", "text/javascript"),
+          "/migrate.js": ("migrate.js", "text/javascript"),
+          "/cloud_view.js": ("cloud_view.js", "text/javascript"),
+          "/capture_view.js": ("capture_view.js", "text/javascript"),
           "/style.css": ("style.css", "text/css")}
 
 
@@ -193,6 +177,10 @@ class AppState:
         self.jobs: dict[str, ScanJob] = {}
         self.revealable: set[str] = set()  # 이 서버가 만든 정리 결과 폴더만 Finder에서 열 수 있다
         self.lock = threading.Lock()
+        self.marks = MarkStore(cfg.data_dir / "events")  # 셀렉·보류·버릴 컷 표시 (행사 단위)
+        self.faces_lock = threading.Lock()  # 얼굴 인식은 한 번에 하나씩
+        self.reviews = ReviewStore(cfg.data_dir / "events")  # 훑기 기록 (행사 단위)
+        self.cloud = cfg.cloud or CloudService(cfg.data_dir, SupabaseClient(), MacKeychain())
 
     def start_scan(self, folder: Path) -> ScanJob:
         job_id = secrets.token_hex(6)
@@ -349,6 +337,8 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.OK, {"ok": True, "version": __version__})
         if method == "POST" and path == "/api/scan":
             return self._scan()
+        if path.startswith("/api/cloud/"):
+            return self._cloud(method, path)
         m = re.fullmatch(r"/api/jobs/([0-9a-f]{12})(/.*)?", path)
         if m:
             job = self.state.job(m.group(1))
@@ -404,13 +394,71 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.CONFLICT, {"error": "분석이 아직 끝나지 않았다",
                                                     "state": job.state})
         if method == "GET" and rest == "/results":
-            return self._send(HTTPStatus.OK, {"rows": [_row(r) for r in job.results]})
+            return self._send(HTTPStatus.OK, {"rows": [
+                {**_row(r), "size": file_size(job.folder / r.file)} for r in job.results]})
+        if rest == "/capture-one" and method == "POST":
+            return self._capture(job)
+        if rest == "/marks" and method in ("GET", "POST"):
+            return self._marks(job, method)
         m = re.fullmatch(r"/(thumb|photo)/(.+)", rest)
         if method == "GET" and m:
             return self._image(job, m.group(1), m.group(2), params)
+        m = re.fullmatch(r"/faces/(.+)", rest)
+        if method == "GET" and m:
+            return self._faces(job, m.group(1))
+        if method == "POST" and rest == "/review":
+            return self._review(job)
         if method == "POST" and rest == "/sort":
             return self._sort(job)
         self._send(HTTPStatus.NOT_FOUND, {"error": "없는 주소"})
+
+    def _cloud(self, method: str, path: str) -> None:
+        body = self._json_body() if method == "POST" else None
+        if method == "POST" and body is None:
+            return
+        status, payload = handle_cloud(self.state.cloud, method, path, body)
+        self._send(HTTPStatus(status), payload)
+
+    def _capture(self, job: ScanJob) -> None:
+        body = self._json_body()
+        if body is None:
+            return
+        bridge = self.state.cfg.capture_bridge
+        extra = {"make_bridge": bridge} if bridge else {}
+        status, payload = handle_capture(self.state.marks, job.folder, set(job.by_name()),
+                                         self.state.cfg.data_dir, body, **extra)
+        self._send(HTTPStatus(status), payload)
+
+    def _marks(self, job: ScanJob, method: str) -> None:
+        names = set(job.by_name())
+        if method == "GET":
+            return self._send(HTTPStatus.OK, list_marks(self.state.marks, job.folder, names))
+        body = self._json_body()
+        if body is not None:
+            status, payload = post_mark(self.state.marks, job.folder, names, body)
+            self._send(HTTPStatus(status), payload)
+
+    def _review(self, job: ScanJob) -> None:
+        body = self._json_body()
+        if body is not None:
+            status, payload = post_review(self.state.reviews, job.folder, job.id, body, __version__)
+            self._send(HTTPStatus(status), payload)
+
+    def _faces(self, job: ScanJob, name: str) -> None:
+        if name not in job.by_name():  # 분석 결과에 있는 파일 이름만 (경로 조작 방지)
+            return self._send(HTTPStatus.NOT_FOUND, {"error": "없는 사진"})
+        with self.state.faces_lock:
+            info = job.faces.get(name)
+            if info is None:
+                path = job.folder / name
+                flip = (self.state.cfg.orientation or default_orientation)(path)
+                finder = self.state.cfg.faces or face_info
+                try:
+                    info = job.faces[name] = finder(path, flip)
+                except Exception as exc:  # noqa: BLE001  얼굴 정보가 없어도 훑기는 계속된다
+                    return self._send(HTTPStatus.INTERNAL_SERVER_ERROR,
+                                      {"error": f"얼굴 정보를 읽을 수 없다: {type(exc).__name__}"})
+        self._send(HTTPStatus.OK, info)
 
     def _image(self, job: ScanJob, kind: str, name: str, params: dict[str, str]) -> None:
         result = job.by_name().get(name)  # 분석 결과에 있는 파일 이름만 (경로 조작 방지)
@@ -451,10 +499,13 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.BAD_REQUEST, {"error": msg})
         names = set(job.by_name())
         known = {n for n in rescue if n in names}
+        # 셀렉·보류·버릴 컷 표시는 화면이 보낸 것이 아니라 서버에 저장된 것을 쓴다
+        stored = list_marks(self.state.marks, job.folder, names)["marks"]
+        marks = {m["file"]: m["kind"] for m in stored}
         try:
             result = run_sort(
                 job.folder, job.report, out_root, commit=bool(body.get("commit", False)),
-                rescue=known, by_reason=bool(body.get("by_reason", True)))
+                rescue=known, marks=marks, by_reason=bool(body.get("by_reason", True)))
         except SortError as exc:
             return self._send(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
         plan = result.plan
@@ -468,7 +519,7 @@ class _Handler(BaseHTTPRequestHandler):
             "unlisted": plan.unlisted, "method": result.method, "needs_space": result.needs_space,
             "result_dir": str(result.result_dir) if result.result_dir else None,
             "cloned": result.cloned, "copied": result.copied, "aborted": result.aborted,
-            "mismatches": result.mismatches,
+            "mismatches": result.mismatches, "marked": plan.mark_counts(),
         })
 
 

@@ -10,6 +10,9 @@ from PIL import Image
 
 from bcut.scan import PhotoResult
 from bcut.ui import server as srv
+from bcut.ui.cloud import SupabaseClient
+from bcut.ui.cloud_service import CloudService
+from bcut.ui.cloud_state import MemoryVault
 from bcut.ui.server import ServerConfig, make_server, split_target, unquote
 
 TOKEN = "t" * 32
@@ -47,7 +50,8 @@ def world(tmp_path):
         return out
 
     cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "data", scan=fake_scan,
-                       read_photo=lambda p, size: jpeg((1, 2, 3)) if size == "view" else b"FULL")
+                       read_photo=lambda p, size: jpeg((1, 2, 3)) if size == "view" else b"FULL",
+                       cloud=CloudService(tmp_path / "data", SupabaseClient(), MemoryVault()))
     server = make_server(cfg)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield server, ev, tmp_path, calls
@@ -163,6 +167,177 @@ def test_access_log_is_silent(world, capsys):
 
 
 # ---- 분석 작업 ----------------------------------------------------------------------------
+
+def start_job(server, ev):
+    job = jbody(call(server, "POST", "/api/scan", {"folder": str(ev)})[2])["job"]
+    wait_done(server, job)
+    return job
+
+
+# ---- 표시: 셀렉·보류·버릴 컷 (훑기 모드) ----------------------------------------------------
+
+def test_results_include_the_file_size(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    rows = {r["file"]: r for r in jbody(call(server, "GET", f"/api/jobs/{job}/results")[2])["rows"]}
+    assert rows["A.CR3"]["size"] == (ev / "A.CR3").stat().st_size == 250
+
+
+def test_marks_start_empty_and_need_the_token(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    assert jbody(call(server, "GET", f"/api/jobs/{job}/marks")[2]) == {"marks": [], "broken": 0}
+    assert call(server, "GET", f"/api/jobs/{job}/marks", token=False)[0] == 401
+    assert call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"},
+                token=False)[0] == 401
+
+
+def test_set_replace_and_clear_a_mark(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+
+    def post(file, kind):
+        return call(server, "POST", f"/api/jobs/{job}/marks", {"file": file, "kind": kind})
+
+    def current():
+        return {m["file"]: m["kind"] for m in jbody(call(server, "GET", f"/api/jobs/{job}/marks")[2])["marks"]}
+
+    status, _, raw = post("A.CR3", "pick")
+    assert status == 200 and jbody(raw) == {"file": "A.CR3", "size": 250, "kind": "pick"}
+    post("B.CR3", "maybe")
+    assert current() == {"A.CR3": "pick", "B.CR3": "maybe"}
+    post("A.CR3", "discard")  # 새 표시가 앞 표시를 바꾼다 (한 장에 하나)
+    assert current() == {"A.CR3": "discard", "B.CR3": "maybe"}
+    assert jbody(post("A.CR3", None)[2])["kind"] is None  # 해제
+    assert current() == {"B.CR3": "maybe"}
+
+
+def test_marks_stay_when_the_same_event_is_scanned_again(world):
+    server, ev, *_ = world
+    first = start_job(server, ev)
+    call(server, "POST", f"/api/jobs/{first}/marks", {"file": "C.CR3", "kind": "pick"})
+    second = start_job(server, ev)  # 다시 검사하면 작업 번호가 바뀐다
+    assert second != first
+    marks = jbody(call(server, "GET", f"/api/jobs/{second}/marks")[2])["marks"]
+    assert marks == [{"file": "C.CR3", "size": 250, "kind": "pick"}]
+
+
+def test_marks_reject_bad_input(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/marks"
+    assert call(server, "POST", url, {"file": "../A.CR3", "kind": "pick"})[0] == 404  # 경로 조작
+    assert call(server, "POST", url, {"file": "없는.CR3", "kind": "pick"})[0] == 404
+    assert call(server, "POST", url, {"file": "A.CR3", "kind": "like"})[0] == 400
+    assert call(server, "POST", url, {"kind": "pick"})[0] == 404
+    assert call(server, "POST", url, b"not json")[0] == 400
+    assert call(server, "PUT", url, {"file": "A.CR3", "kind": "pick"})[0] == 405
+    assert jbody(call(server, "GET", url)[2])["marks"] == []
+
+
+def test_sort_uses_the_stored_marks_for_pick_maybe_discard_folders(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    for name, kind in (("A.CR3", "pick"), ("B.CR3", "maybe"), ("C.CR3", "discard")):
+        call(server, "POST", f"/api/jobs/{job}/marks", {"file": name, "kind": kind})
+    before = sorted(p.read_bytes() for p in ev.iterdir())
+    out = tmp / "담기"
+    status, _, raw = call(server, "POST", f"/api/jobs/{job}/sort", {"commit": False, "out": str(out)})
+    plan = jbody(raw)
+    assert status == 200
+    assert plan["counts"]["셀렉"] == 1 and plan["counts"]["보류"] == 1 and plan["counts"]["버릴 것 같은 컷"] == 1
+    assert list(plan["counts"])[0] == "셀렉" and plan["marked"] == {"pick": 1, "maybe": 1, "discard": 1}
+    assert not out.exists()  # 미리보기는 아무것도 만들지 않는다
+    done = jbody(call(server, "POST", f"/api/jobs/{job}/sort", {"commit": True, "out": str(out)})[2])
+    d = Path(done["result_dir"])
+    assert (d / "셀렉" / "A.CR3").exists() and (d / "보류" / "B.CR3").exists()
+    assert (d / "버릴 것 같은 컷" / "C.CR3").exists()
+    assert sorted(p.read_bytes() for p in ev.iterdir()) == before  # 원본은 그대로
+
+
+def test_sort_ignores_marks_sent_by_the_screen_and_other_events(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    body = {"commit": False, "marks": {"A.CR3": "pick"}, "out": str(tmp / "o")}
+    plan = jbody(call(server, "POST", f"/api/jobs/{job}/sort", body)[2])
+    assert plan["marked"] == {"pick": 0, "maybe": 0, "discard": 0}  # 저장된 표시만 쓴다
+
+
+def test_faces_endpoint_computes_once_and_guards_names(tmp_path):
+    ev = tmp_path / "행사"
+    ev.mkdir()
+    (ev / "A.CR3").write_bytes(b"a" * 10)
+    calls = []
+
+    def fake_faces(path, flip):
+        calls.append((path.name, flip))
+        return {"w": 100, "h": 50, "faces": [{"box": [0.1, 0.1, 0.2, 0.2], "area": 0.04, "eyes": []}]}
+
+    cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "d", faces=fake_faces,
+                       scan=lambda folder, progress=None, **kw: [result("A.CR3", "candidate")],
+                       orientation=lambda p: 6)
+    server = make_server(cfg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        job = start_job(server, ev)
+        status, _, raw = call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert status == 200 and jbody(raw)["faces"][0]["area"] == 0.04
+        call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert calls == [("A.CR3", 6)]  # 두 번 불러도 계산은 한 번, 회전 값을 넘긴다
+        assert call(server, "GET", f"/api/jobs/{job}/faces/A.CR3", token=False)[0] == 401
+        assert call(server, "GET", f"/api/jobs/{job}/faces/../A.CR3")[0] == 404  # 경로 조작
+        assert call(server, "GET", f"/api/jobs/{job}/faces/NONE.CR3")[0] == 404
+        assert call(server, "POST", f"/api/jobs/{job}/faces/A.CR3", {})[0] == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_faces_failure_is_reported_without_stopping_the_server(tmp_path):
+    ev = tmp_path / "행사"
+    ev.mkdir()
+    (ev / "A.CR3").write_bytes(b"a")
+
+    def boom(path, flip):
+        raise RuntimeError("Vision 요청 실패")
+
+    cfg = ServerConfig(token=TOKEN, data_dir=tmp_path / "d", faces=boom, orientation=lambda p: 0,
+                       scan=lambda folder, progress=None, **kw: [result("A.CR3")])
+    server = make_server(cfg)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        job = start_job(server, ev)
+        status, _, raw = call(server, "GET", f"/api/jobs/{job}/faces/A.CR3")
+        assert status == 500 and "얼굴 정보를 읽을 수 없다" in jbody(raw)["error"]
+        assert call(server, "GET", "/api/health")[0] == 200  # 훑기는 계속된다
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_review_record_is_saved_per_event_and_guards_input(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    body = {"id": "rev-server-0001", "started_at": "2026-10-20T10:00:00+09:00",
+            "ended_at": "2026-10-20T10:02:00+09:00", "seen": 60, "pick": 7, "maybe": 1, "discard": 2}
+    status, _, raw = call(server, "POST", f"/api/jobs/{job}/review", body)
+    assert status == 200 and jbody(raw)["seconds_per_photo"] == 2.0
+    call(server, "POST", f"/api/jobs/{job}/review", body)  # 다시 보내도 한 줄만
+    line = (tmp / "data" / "events" / "행사" / "reviews.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(line) == 1 and json.loads(line[0])["scan_ref"] == job and json.loads(line[0])["photos_seen"] == 60
+    assert call(server, "POST", f"/api/jobs/{job}/review", {**body, "id": "rev-server-0002", "seen": -5})[0] == 400
+    assert call(server, "POST", f"/api/jobs/{job}/review", body, token=False)[0] == 401
+    assert call(server, "GET", f"/api/jobs/{job}/review")[0] == 404
+    assert sorted(p.name for p in ev.iterdir()) == ["A.CR3", "B.CR3", "C.CR3"]  # 원본 폴더에는 쓰지 않는다
+
+
+def test_marks_are_not_written_into_the_event_folder(world):
+    server, ev, tmp, _ = world
+    job = start_job(server, ev)
+    before = sorted(p.name for p in ev.iterdir())
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"})
+    assert sorted(p.name for p in ev.iterdir()) == before  # 원본 폴더에는 아무것도 쓰지 않는다
+    assert (tmp / "data" / "events" / "행사" / "marks.jsonl").exists()
 
 def test_scan_job_flow_results_and_thumbnails(world):
     server, ev, tmp, calls = world
@@ -313,7 +488,10 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     html = raw.decode("utf-8")
     assert status == 200 and headers["Content-Type"].startswith("text/html")
     assert TOKEN in html and "__TOKEN__" not in html
-    for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/style.css", "css")):
+    for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
+                        ("/review.js", "javascript"), ("/sort_view.js", "javascript"),
+                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"),
+                        ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
         assert status == 200 and ctype in headers["Content-Type"] and len(raw) > 100
@@ -324,11 +502,21 @@ def test_web_files_follow_the_security_rules():
     web = Path(srv.__file__).parent / "web"
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
-    for f in ("index.html", "app.js", "logic.js", "style.css"):
+    for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
+              "cloud_view.js", "capture_view.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
     assert "fetch(" in (web / "app.js").read_text(encoding="utf-8")
+
+
+def test_screen_files_avoid_retired_and_hard_words():
+    web = Path(srv.__file__).parent / "web"
+    for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js",
+              "cloud_view.js", "capture_view.js"):
+        text = (web / f).read_text(encoding="utf-8")
+        for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
+            assert word not in text, (f, word)
 
 
 def test_pyproject_packages_the_web_files():
@@ -444,3 +632,73 @@ def test_thumbnail_is_rotated_by_orientation_and_cached(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+# ---- 클라우드 올리기 길 (spec FR-29~33) -------------------------------------------------------
+
+def test_cloud_status_and_no_request_without_consent(world):
+    server, *_ = world
+    st, _, raw = call(server, "GET", "/api/cloud/status")
+    assert st == 200 and jbody(raw)["state"] == "need_consent" and jbody(raw)["pending"] == 0
+    st, _, raw = call(server, "POST", "/api/cloud/sync", {})
+    assert st == 200 and jbody(raw)["state"] == "need_consent"  # 동의 전에는 요청 없이 상태만
+    st, _, raw = call(server, "POST", "/api/cloud/login", {"email": "a@b.c", "password": "x"})
+    assert st == 403 and jbody(raw)["kind"] == "consent"
+
+
+def test_cloud_consent_then_login_needed_and_token_required(world):
+    server, *_ = world
+    assert call(server, "POST", "/api/cloud/consent", {})[0] == 200
+    st, _, raw = call(server, "GET", "/api/cloud/status")
+    assert jbody(raw)["state"] == "need_login" and jbody(raw)["consented"]
+    assert call(server, "GET", "/api/cloud/status", token=False)[0] == 401
+    assert call(server, "POST", "/api/cloud/login", {"email": ""})[0] == 400
+    assert call(server, "POST", "/api/cloud/nope", {})[0] == 404
+
+
+# ---- Capture One에도 표시하기 길 (spec S6) ---------------------------------------------------
+
+class FakeCaptureBridge:
+    """Capture One 대역: 읽기만 있고, 쓰기가 불리면 시험이 실패한다 (미리보기 시험용)."""
+
+    def __init__(self, folder):
+        from bcut.bridge.capture_one import VariantInfo
+        self.catalog_name = "bcut-test"
+        self.items = [VariantInfo(str(folder / n), n, 3, 2, (), "1", n) for n in ("A.CR3", "B.CR3")]
+
+    def list_variants(self):
+        return list(self.items)
+
+    def keywords(self):
+        return ["bcut-셀렉", "bcut-보류", "bcut-버릴컷"]
+
+    def backup_catalog(self, location):
+        raise AssertionError("미리보기는 카탈로그에 쓰지 않는다")
+
+    def apply_keyword(self, keyword, refs):
+        raise AssertionError("미리보기는 키워드를 붙이지 않는다")
+
+
+def test_capture_one_route_previews_marks_without_writing(world):
+    server, ev, *_ = world
+    server.app_state.cfg.capture_bridge = lambda catalog: FakeCaptureBridge(ev)
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/capture-one"
+    st, _, raw = call(server, "POST", url, {"action": "preview", "catalog": "bcut-test"})
+    assert st == 200 and "표시한 사진이 없어요" in jbody(raw)["aborted"]
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "A.CR3", "kind": "pick"})
+    call(server, "POST", f"/api/jobs/{job}/marks", {"file": "B.CR3", "kind": "discard"})
+    st, _, raw = call(server, "POST", url, {"action": "preview", "catalog": "bcut-test"})
+    out = jbody(raw)
+    assert st == 200 and out["aborted"] is None and out["mode"] == "dry-run"
+    assert out["keyword_counts"] == {"bcut-버릴컷": 1, "bcut-셀렉": 1}
+
+
+def test_capture_one_route_guards(world):
+    server, ev, *_ = world
+    job = start_job(server, ev)
+    url = f"/api/jobs/{job}/capture-one"
+    assert call(server, "POST", url, {"action": "preview", "catalog": "c"}, token=False)[0] == 401
+    assert call(server, "POST", url, {"action": "x", "catalog": "c"})[0] == 400
+    assert call(server, "POST", url, {"action": "preview", "catalog": ""})[0] == 400
+    assert call(server, "GET", url)[0] in (404, 405)

@@ -101,6 +101,52 @@ def test_rescued_cuts_go_to_normal_only(world, tmp_path):
     assert read_rescue(None) == set()
 
 
+def test_marks_go_to_pick_maybe_and_discard_folders(world):
+    ev, _, report = world
+    marks = {"A.CR3": "pick", "C.CR3": "pick", "B.CR3": "maybe", "F.CR3": "discard",
+             "GONE.CR3": "pick", "ZZZ.CR3": "maybe", "D.CR3": "bogus"}
+    p = plan_sort(read_rows(report), ev, marks=marks)
+    assert p.folders["셀렉"] == ["A.CR3", "C.CR3"]  # 도구가 의심했든 아니든 셀렉 폴더에만
+    assert p.folders["보류"] == ["B.CR3"]
+    assert p.folders["버릴 것 같은 컷"] == ["F.CR3"]  # 사용자가 정한 버릴 컷은 이 폴더에 합친다
+    assert p.folders["이상 없음"] == ["D.CR3"]  # 알 수 없는 표시는 무시하고 등급대로
+    assert p.folders["판단 못 함"] == ["E.CR3"] and "직접 확인" not in p.folders
+    # 표시한 사진은 문제 종류별 폴더에서 빠진다 (A·B·F 모두 표시함)
+    assert not any(k.startswith("문제 종류별") for k in p.folders)
+    assert p.marked == {"A.CR3": "pick", "C.CR3": "pick", "B.CR3": "maybe", "F.CR3": "discard"}
+    assert p.mark_counts() == {"pick": 2, "maybe": 1, "discard": 1}
+    assert p.unknown_marks == ["GONE.CR3", "ZZZ.CR3"]  # 폴더에 없거나 검사에 없는 사진
+    assert p.files == 6 and p.placements == 6  # 사진마다 사본 하나씩
+
+
+def test_unmarked_photos_keep_the_old_rules_and_pick_folder_comes_first(world):
+    ev, _, report = world
+    p = plan_sort(read_rows(report), ev, marks={"C.CR3": "pick"})
+    assert p.folders["버릴 것 같은 컷"] == ["A.CR3"] and p.folders["직접 확인"] == ["B.CR3", "F.CR3"]
+    assert p.folders["문제 종류별/눈 감김"] == ["A.CR3", "B.CR3"]
+    assert list(p.counts())[0] == "셀렉" and list(p.counts())[-1].startswith("문제 종류별")
+
+
+def test_marks_win_over_the_old_rescue_list(world):
+    ev, _, report = world
+    p = plan_sort(read_rows(report), ev, rescue={"A.CR3"}, marks={"A.CR3": "maybe"})
+    assert p.folders["보류"] == ["A.CR3"] and p.rescued == [] and "A.CR3" not in p.folders["이상 없음"]
+
+
+def test_commit_with_marks_copies_into_new_folders_and_keeps_the_original(world):
+    ev, out, report = world
+    ev_before = snapshot(ev)
+    res = run_sort(ev, report, out, commit=True, marks={"A.CR3": "pick", "B.CR3": "maybe"},
+                   now=lambda: NOW)
+    d = res.result_dir
+    assert res.ok and (d / "셀렉" / "A.CR3").read_bytes() == (ev / "A.CR3").read_bytes()
+    assert (d / "보류" / "B.CR3").exists() and not (d / "버릴 것 같은 컷" / "A.CR3").exists()
+    assert snapshot(ev) == ev_before  # 원본은 그대로
+    rec = json.loads((d / organize.RECORD_NAME).read_text(encoding="utf-8"))
+    assert rec["marks"] == {"A.CR3": "pick", "B.CR3": "maybe"}
+    assert rec["files"]["A.CR3"] == ["셀렉"] and rec["counts"]["셀렉"] == 1
+
+
 def test_dry_run_writes_nothing(world):
     ev, out, report = world
     before = (snapshot(ev), snapshot(out))

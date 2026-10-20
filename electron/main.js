@@ -23,7 +23,9 @@ if (!app.requestSingleInstanceLock()) {
 function loadConfig() {
   let cfg = {};
   try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')); } catch (_) {}
-  return { python: process.env.BCUT_PYTHON || cfg.python };
+  // 나눠 주기용 빌드는 앱 안의 파이썬을 상대 경로로 가리킨다 (다른 맥에서도 열리게)
+  const rel = cfg.python && !path.isAbsolute(cfg.python) ? path.resolve(__dirname, cfg.python) : cfg.python;
+  return { python: process.env.BCUT_PYTHON || rel };
 }
 
 // 같은 포트를 쓰면 "살리기" 기억(브라우저 저장소는 주소+포트별)이 앱을 껐다 켜도 남는다. 사용 중이면 빈 포트로 대체.
@@ -62,6 +64,9 @@ async function startServer() {
   const dataDir = path.join(app.getPath('userData'), 'data');
   const code = `import sys; from bcut.cli import main; sys.exit(main(['serve','--port','${port}','--data-dir',${JSON.stringify(dataDir)}]))`;
   const env = { ...process.env, BCUT_TOKEN: token, PYTHONUNBUFFERED: '1' };
+  // 앱에 담은 인증서 목록 (Homebrew가 없는 맥에서도 슈파베이스 https 확인이 되게)
+  const certs = path.join(__dirname, 'cacert.pem');
+  if (fs.existsSync(certs)) env.SSL_CERT_FILE = certs;
   server = spawn(cfg.python, ['-B', '-c', code], { env, cwd: app.getPath('userData') });
   const keep = (b) => { serverLog = (serverLog + b.toString()).slice(-4000); };
   server.stdout.on('data', keep);
@@ -106,6 +111,16 @@ async function pickFolder() {
 }
 ipcMain.handle('choose-folder', pickFolder);
 
+// ⌘Z: 맥은 메뉴의 기본 "실행 취소"가 단축키를 먼저 가로채서 화면의 키 입력에 닿지 않는다.
+// 그래서 메뉴 항목을 직접 만들고, 화면(훑기 모드)이 처리하면 거기서 끝내고 아니면 기본 동작(글자 되돌리기)을 한다.
+// 화면으로 보내는 글자는 아래 고정 문장 하나뿐이다.
+const UNDO_PROBE = "(function(){var e=new CustomEvent('bcut-undo',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented;})()";
+async function undoFromMenu(_item, w) {
+  if (!w) return;
+  const handled = await w.webContents.executeJavaScript(UNDO_PROBE);
+  if (!handled) w.webContents.undo();
+}
+
 function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { label: app.name, submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
@@ -113,7 +128,7 @@ function buildMenu() {
       label: '폴더 열기…', accelerator: 'CmdOrCtrl+O',
       click: async () => { const p = await pickFolder(); if (p && win) win.webContents.send('open-folder', p); },
     }] },
-    { label: '편집', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
+    { label: '편집', submenu: [{ label: '실행 취소', accelerator: 'CmdOrCtrl+Z', click: undoFromMenu }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
     { label: '보기', submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { label: '윈도우', submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }] },
   ]));

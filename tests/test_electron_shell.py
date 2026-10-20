@@ -47,6 +47,15 @@ def test_preload_exposes_only_three_small_functions():
     assert PRELOAD.count("ipcRenderer.invoke") == 1  # 화면이 부를 수 있는 명령은 폴더 선택 하나
 
 
+def test_cmd_z_is_handled_by_our_menu_item_not_the_default_undo():
+    main = (EL / "main.js").read_text(encoding="utf-8")
+    assert "role: 'undo'" not in main  # 기본 실행 취소가 ⌘Z를 가로채지 않게 한다
+    assert "accelerator: 'CmdOrCtrl+Z'" in main and "bcut-undo" in main
+    assert main.count("executeJavaScript(") == 1 and "executeJavaScript(UNDO_PROBE)" in main  # 고정 문장만
+    app = (EL.parent / "src" / "bcut" / "ui" / "web" / "app.js").read_text(encoding="utf-8")
+    assert "addEventListener('bcut-undo'" in app
+
+
 def test_package_json():
     pkg = json.loads((EL / "package.json").read_text(encoding="utf-8"))
     assert pkg["main"] == "main.js" and pkg["private"] is True and pkg["productName"] == "bcut"
@@ -61,6 +70,16 @@ def test_build_script_rules():
     assert 'case "$WHERE" in "$RUNTIME"/*' in BUILD  # 실행 환경 안에서 불러와지는지 검사
     assert "codesign --verify --deep --strict" in BUILD
     assert "SHASUMS256" in BUILD  # 내려받을 때는 체크섬 확인
+
+
+def test_dist_build_script_rules():
+    text = (EL / "build_dist.sh").read_text(encoding="utf-8")
+    assert text.startswith("#!/bin/bash") and "set -euo pipefail" in text
+    assert subprocess.run(["bash", "-n", str(EL / "build_dist.sh")]).returncode == 0
+    assert '"python": "../py/bin/python3.13"' in text  # 앱 안의 파이썬을 상대 경로로 (다른 맥에서도)
+    assert "Info.plist" in text and "cacert.pem" in text
+    assert "~/Applications" not in text.split("\n", 3)[3] or "건드리지 않는다" in text  # 내 앱은 안 건드림
+    assert "path.isAbsolute(cfg.python)" in MAIN and "SSL_CERT_FILE" in MAIN
 
 
 @pytest.mark.skipif(shutil.which("osascript") is None, reason="osascript 없음")
