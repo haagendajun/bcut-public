@@ -38,33 +38,168 @@ PING_SCRIPT = f"""on run argv
 end run
 """
 
-# 폴더 컬렉션(catalog folder)의 변형을 모아 한 줄에 하나씩:
-# 경로, 파일명, 별점, 컬러 태그, 키워드들, 컬렉션 id, 변형 id
+# 컬렉션 하나의 사진을 한 줄에 하나씩 모으는 공통 핸들러 (카탈로그·세션이 함께 쓴다).
+# 한 줄: 경로, 파일명, 별점, 컬러 태그, 키워드들, 컬렉션 id, 변형 id
+# **빠른 길**: 사진마다 따로 묻지 않고 컬렉션 하나에서 속성을 한꺼번에 받는다(세션 962장 0.6초,
+# 사진마다 묻는 옛 방식은 40~60초이고 결과가 같음을 실기로 비교함). 다음 중 하나면 그 컬렉션만
+# 옛 방식으로 읽는다: 이미지 수와 변형 수가 다름(복제본), 맨 앞·맨 뒤 사진의 변형 id가
+# 사진 쪽에서 찾은 것과 다름(순서가 어긋남), 한꺼번에 읽다가 오류.
+_READ_ROWS = f"""on readRows(c)
+  set out to ""
+  tell application "Capture One"
+    try
+      set n to count of (every image of c)
+      if n is 0 then return ""
+      set fast to false
+      try
+        if n is (count of (every variant of c)) then
+          set ids to id of every variant of c
+          set okFirst to ((item 1 of ids) is (id of variant 1 of image 1 of c))
+          set okLast to ((item n of ids) is (id of variant 1 of image n of c))
+          if okFirst and okLast then set fast to true
+        end if
+      end try
+      if fast then set out to my readFast(c, n, ids)
+    end try
+  end tell
+  if out is "" then set out to my readSlow(c)
+  return out
+end readRows
+
+on readFast(c, n, ids)
+  tell application "Capture One"
+    set ps to path of every image of c
+    set ns to name of every image of c
+    set rs to rating of every variant of c
+    set cs to color tag of every variant of c
+    set kwl to name of every keyword of every variant of c
+    set cid to id of c
+  end tell
+  set rowList to {{}}
+  repeat with i from 1 to n
+    set kws to ""
+    repeat with k in (item i of kwl)
+      if k is not missing value then set kws to kws & (k as text) & "{KEYWORD_SEP}"
+    end repeat
+    set row to (item i of ps) & "{FIELD_SEP}" & (item i of ns) & "{FIELD_SEP}"
+    set row to row & (item i of rs) & "{FIELD_SEP}" & (item i of cs) & "{FIELD_SEP}"
+    set end of rowList to row & kws & "{FIELD_SEP}" & cid & "{FIELD_SEP}" & (item i of ids)
+  end repeat
+  set AppleScript's text item delimiters to linefeed
+  set joined to rowList as text
+  set AppleScript's text item delimiters to ""
+  return joined & linefeed
+end readFast
+
+on readSlow(c)
+  set out to ""
+  tell application "Capture One"
+    set ims to images of c
+    repeat with i from 1 to (count of ims)
+      set im to item i of ims
+      set v to variant 1 of im
+      set kws to ""
+      try
+        set names to name of every keyword of v
+        repeat with n in names
+          if n is not missing value then set kws to kws & (n as text) & "{KEYWORD_SEP}"
+        end repeat
+      end try
+      set out to out & (path of im) & "{FIELD_SEP}" & (name of im) & "{FIELD_SEP}"
+      set out to out & (rating of v) & "{FIELD_SEP}" & (color tag of v) & "{FIELD_SEP}"
+      set out to out & kws & "{FIELD_SEP}" & (id of c) & "{FIELD_SEP}" & (id of v) & linefeed
+    end repeat
+  end tell
+  return out
+end readSlow
+"""
+
+# 카탈로그: 폴더 컬렉션(catalog folder)의 변형을 모은다
 LIST_SCRIPT = f"""on run argv
   tell application "Capture One"
 {_GUARD}
     set out to ""
     repeat with c in (every collection of doc whose kind is catalog folder)
-      set ims to images of c
-      repeat with i from 1 to (count of ims)
-        set im to item i of ims
-        set v to variant 1 of im
-        set kws to ""
-        try
-          set names to name of every keyword of v
-          repeat with n in names
-            if n is not missing value then set kws to kws & (n as text) & "{KEYWORD_SEP}"
-          end repeat
-        end try
-        set out to out & (path of im) & "{FIELD_SEP}" & (name of im) & "{FIELD_SEP}"
-        set out to out & (rating of v) & "{FIELD_SEP}" & (color tag of v) & "{FIELD_SEP}"
-        set out to out & kws & "{FIELD_SEP}" & (id of c) & "{FIELD_SEP}" & (id of v) & linefeed
+      set out to out & my readRows(c)
+    end repeat
+    return out
+  end tell
+end run
+
+{_READ_ROWS}"""
+
+
+# 문서 종류: "catalog" 또는 "session" (지정한 문서가 열려 있을 때만 동작)
+KIND_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+    return (kind of doc) as text
+  end tell
+end run
+"""
+
+# 세션의 사진 모으기 (읽기). 세션은 컬렉션 종류가 카탈로그와 달라서(폴더가 Capture·Selects 등),
+# 폴더 컬렉션을 먼저, 나머지를 그다음에 읽고 하위 컬렉션까지 내려간다. 같은 경로는 파이썬에서
+# 한 번만 센다. 한 줄의 모양과 빠른 길은 LIST_SCRIPT와 같다(`_READ_ROWS`).
+SESSION_LIST_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+    set out to ""
+    repeat with pass from 1 to 2
+      repeat with c in (every collection of doc)
+        set isFolder to ((kind of c) is catalog folder)
+        if (pass is 1 and isFolder) or (pass is 2 and not isFolder) then
+          set out to out & my readTree(c)
+        end if
       end repeat
     end repeat
     return out
   end tell
 end run
+
+on readTree(c)
+  set out to my readRows(c)
+  tell application "Capture One"
+    try
+      repeat with sub in (every collection of c)
+        set out to out & my readTree(sub)
+      end repeat
+    end try
+  end tell
+  return out
+end readTree
+
+{_READ_ROWS}"""
+
+
+# 별점·컬러 태그 쓰기 (사용자가 고른 값만, ADR-0011).
+# 인자: 카탈로그, 값(정수), "컬렉션id|변형id" 목록.
+# 키워드와 달리 값 하나를 변형 여러 개에 직접 정한다. 이전 값은 호출하는 쪽이 먼저 저장해 둔다.
+_SET_BODY = f"""    set val to (item 2 of argv) as integer
+    repeat with i from 3 to (count of argv)
+      set AppleScript's text item delimiters to "{KEYWORD_SEP}"
+      set parts to text items of (item i of argv)
+      set AppleScript's text item delimiters to ""
+      set v to (variant id (item 2 of parts) of collection id (item 1 of parts) of doc)
+      set PROP of v to val
+    end repeat
+    return ((count of argv) - 2) as text
 """
+
+SET_RATING_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+{_SET_BODY.replace("PROP", "rating")}  end tell
+end run
+"""
+
+SET_COLOR_SCRIPT = f"""on run argv
+  tell application "Capture One"
+{_GUARD}
+{_SET_BODY.replace("PROP", "color tag")}  end tell
+end run
+"""
+
 
 KEYWORD_SCRIPT = f"""on run argv
   tell application "Capture One"
@@ -189,6 +324,7 @@ class CaptureOneBridge:
         if not catalog_name.strip():
             raise ValueError("카탈로그 이름이 비어 있다")
         self.catalog_name = catalog_name
+        self.session = False  # 세션이면 True: 사진 읽기 방식이 달라진다 (document_kind로 확인)
         self._run = run
         self._runner = runner
         self._timeout = timeout
@@ -210,8 +346,12 @@ class CaptureOneBridge:
         """열려 있는 카탈로그 이름을 돌려준다. 지정한 카탈로그가 아니면 AppleScriptError."""
         return self._call(PING_SCRIPT)
 
+    def document_kind(self) -> str:
+        """열려 있는 문서가 "catalog"인지 "session"인지. 지정한 문서가 아니면 AppleScriptError."""
+        return self._call(KIND_SCRIPT).strip().lower()
+
     def list_variants(self) -> list[VariantInfo]:
-        return parse_variants(self._call(LIST_SCRIPT))
+        return parse_variants(self._call(SESSION_LIST_SCRIPT if self.session else LIST_SCRIPT))
 
     def backup_catalog(self, location: str | Path) -> None:
         """Capture One의 카탈로그 백업을 `location` 폴더에 만든다. 사진 파일은 건드리지 않는다."""
@@ -228,6 +368,20 @@ class CaptureOneBridge:
             return 0
         args = [self.catalog_name, keyword, *[f"{c}{KEYWORD_SEP}{v}" for c, v in refs]]
         return int(self._run(APPLY_KEYWORD_SCRIPT, args, **self._kwargs()))
+
+    def set_rating(self, value: int, refs: list[tuple[str, str]]) -> int:
+        """별점을 변형 여러 개에 정한다 (사용자가 고른 값만). refs는 (컬렉션 id, 변형 id)."""
+        return self._set(SET_RATING_SCRIPT, value, refs)
+
+    def set_color_tag(self, value: int, refs: list[tuple[str, str]]) -> int:
+        """컬러 태그를 변형 여러 개에 정한다 (사용자가 고른 값만)."""
+        return self._set(SET_COLOR_SCRIPT, value, refs)
+
+    def _set(self, script: str, value: int, refs: list[tuple[str, str]]) -> int:
+        if not refs:
+            return 0
+        args = [self.catalog_name, str(int(value)), *[f"{c}{KEYWORD_SEP}{v}" for c, v in refs]]
+        return int(self._run(script, args, **self._kwargs()))
 
     def strip_keyword(self, keyword: str, refs: list[tuple[str, str]]) -> int:
         """키워드 하나를 변형들에서 뗀다 (이미 없는 것은 세지 않는다). 별점·태그는 그대로.

@@ -490,7 +490,7 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     assert TOKEN in html and "__TOKEN__" not in html
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
                         ("/review.js", "javascript"), ("/sort_view.js", "javascript"),
-                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"),
+                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"), ("/records_view.js", "javascript"),
                         ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
@@ -503,7 +503,7 @@ def test_web_files_follow_the_security_rules():
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
     for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
-              "cloud_view.js", "capture_view.js", "style.css"):
+              "cloud_view.js", "capture_view.js", "records_view.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
@@ -513,7 +513,7 @@ def test_web_files_follow_the_security_rules():
 def test_screen_files_avoid_retired_and_hard_words():
     web = Path(srv.__file__).parent / "web"
     for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js",
-              "cloud_view.js", "capture_view.js"):
+              "cloud_view.js", "capture_view.js", "records_view.js"):
         text = (web / f).read_text(encoding="utf-8")
         for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
             assert word not in text, (f, word)
@@ -702,3 +702,25 @@ def test_capture_one_route_guards(world):
     assert call(server, "POST", url, {"action": "x", "catalog": "c"})[0] == 400
     assert call(server, "POST", url, {"action": "preview", "catalog": ""})[0] == 400
     assert call(server, "GET", url)[0] in (404, 405)
+
+
+# ---- 기록 관리 길 (spec S7) ---------------------------------------------------------------------
+
+def test_records_routes_list_clear_trash_restore(world):
+    server, ev, tmp_path, _ = world
+    job = start_job(server, ev)
+    for f, k in (("A.CR3", "pick"), ("B.CR3", "maybe")):
+        call(server, "POST", f"/api/jobs/{job}/marks", {"file": f, "kind": k})
+    assert call(server, "GET", "/api/records", token=False)[0] == 401
+    st, _, raw = call(server, "GET", "/api/records")
+    card = jbody(raw)["events"][0]
+    assert st == 200 and card["marks"] == {"pick": 1, "maybe": 1, "discard": 0}
+    st, _, raw = call(server, "POST", "/api/records/clear-marks", {"event": card["key"]})
+    assert st == 200 and jbody(raw)["cleared"] == 2
+    assert jbody(call(server, "GET", f"/api/jobs/{job}/marks")[2])["marks"] == []
+    st, _, raw = call(server, "POST", "/api/records/trash", {"kind": "event", "event": card["key"]})
+    tid = jbody(raw)["id"]
+    assert st == 200 and jbody(call(server, "GET", "/api/records")[2])["events"] == []
+    assert call(server, "POST", "/api/records/restore", {"id": tid})[0] == 200
+    assert len(jbody(call(server, "GET", "/api/records")[2])["events"]) == 1
+    assert call(server, "POST", "/api/records/trash", {"kind": "event", "event": ".."})[0] == 400

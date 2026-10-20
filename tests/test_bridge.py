@@ -110,6 +110,48 @@ def test_bridge_list_and_keywords_parse_results():
     assert b.keywords() == ["bcut-eyes_closed", "other"]
 
 
+def test_document_kind_and_session_reading_use_their_own_scripts():
+    calls = []
+
+    def run(script, args, **kw):
+        calls.append(script)
+        return "session" if script == capture_one.KIND_SCRIPT else LINE
+
+    b = CaptureOneBridge("세션이름", run=run)
+    assert b.document_kind() == "session"
+    b.list_variants()  # 기본은 카탈로그 방식
+    b.session = True
+    b.list_variants()
+    assert calls == [capture_one.KIND_SCRIPT, capture_one.LIST_SCRIPT,
+                     capture_one.SESSION_LIST_SCRIPT]
+
+
+def test_style_scripts_check_the_catalog_and_set_only_their_own_property():
+    for script, prop, other in ((capture_one.SET_RATING_SCRIPT, "rating", "color tag"),
+                                (capture_one.SET_COLOR_SCRIPT, "color tag", "rating")):
+        assert "wrong catalog" in script and f"set {prop} of v to val" in script
+        assert f"set {other}" not in script and "apply keyword" not in script
+
+
+def test_set_rating_and_color_pass_value_then_refs():
+    calls = []
+    b = CaptureOneBridge("c", run=lambda s, a, **k: calls.append((s, a)) or "2")
+    assert b.set_rating(4, [("1", "a"), ("1", "b")]) == 2
+    assert b.set_color_tag(1, [("2", "c")]) == 2
+    assert calls[0] == (capture_one.SET_RATING_SCRIPT, ["c", "4", "1|a", "1|b"])
+    assert calls[1] == (capture_one.SET_COLOR_SCRIPT, ["c", "1", "2|c"])
+    assert b.set_rating(3, []) == 0 and len(calls) == 2  # 비어 있으면 호출하지 않는다
+
+
+def test_read_scripts_use_the_fast_path_with_safe_fallback():
+    for script in (capture_one.LIST_SCRIPT, capture_one.SESSION_LIST_SCRIPT):
+        assert "on readFast" in script and "on readSlow" in script
+        assert "path of every image of c" in script       # 한꺼번에 읽는 빠른 길
+        assert "okFirst" in script and "okLast" in script  # 순서가 어긋났는지 확인
+        assert "my readSlow(c)" in script                  # 어긋나면 옛 방식
+        assert "set fast to true" in script
+
+
 def test_bridge_wrong_catalog_error_propagates():
     def run(script, args, **kw):
         raise AppleScriptError("wrong catalog: 실제작업 (expected bcut-test)")
@@ -124,7 +166,8 @@ def test_bridge_rejects_blank_catalog_name():
 
 
 def test_every_script_checks_the_catalog_name_and_writes_nothing():
-    for script in (capture_one.PING_SCRIPT, capture_one.LIST_SCRIPT, capture_one.KEYWORD_SCRIPT):
+    for script in (capture_one.PING_SCRIPT, capture_one.LIST_SCRIPT, capture_one.KEYWORD_SCRIPT,
+                   capture_one.KIND_SCRIPT, capture_one.SESSION_LIST_SCRIPT):
         assert "wrong catalog" in script and "item 1 of argv" in script
         for forbidden in ("set rating", "set color tag", "apply keyword", "delete ", "make new"):
             assert forbidden not in script
