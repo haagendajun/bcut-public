@@ -100,16 +100,31 @@
     wrap.appendChild(ctx.el('span', 'cap-val', COLORS[cur.color]));
     return wrap;
   }
+  function styleSummary(kind) {
+    var c = C.style[kind], parts = [];
+    if (c.rating) parts.push('★ ' + c.rating + '점');
+    if (c.color) parts.push('색 ' + COLORS[c.color]);
+    return parts.length ? parts.join(' · ') : '이름표만';
+  }
+  function row(label, content) {
+    var r = ctx.el('div', 'cap-row'); r.appendChild(ctx.el('span', 'cap-rl', label)); r.appendChild(content); return r;
+  }
   function renderChoices(p) {
     section(p, '2', '무엇을 붙일까요?');
-    var grid = ctx.el('div', 'cap-grid');
+    note(p, '이름표는 항상 붙어요. 별점과 색은 주고 싶은 것만 골라요. 안 고르면 그대로 둬요.', 'muted cap-sub');
     KINDS.forEach(function (k) {
-      var head = ctx.el('div', 'cap-kind'); head.appendChild(ctx.el('b', null, k[1]));
-      head.appendChild(ctx.el('span', 'cap-kw', k[2]));
-      grid.appendChild(head); grid.appendChild(stars(null, k[0])); grid.appendChild(swatches(k[0]));
+      var card = ctx.el('div', 'cap-kcard');
+      var head = ctx.el('div', 'cap-khead');
+      var left = ctx.el('div', 'cap-kleft');
+      left.appendChild(ctx.el('b', null, k[1]));
+      left.appendChild(ctx.el('span', 'cap-kw', '이름표 ' + k[2]));
+      head.appendChild(left);
+      head.appendChild(ctx.el('span', 'cap-ksum' + (styleSummary(k[0]) === '이름표만' ? '' : ' on'), styleSummary(k[0])));
+      card.appendChild(head);
+      card.appendChild(row('별점', stars(null, k[0])));
+      card.appendChild(row('색', swatches(k[0])));
+      p.appendChild(card);
     });
-    p.appendChild(grid);
-    note(p, '키워드는 항상 붙어요. 별점·컬러 태그는 고른 것만 주고, 안 고르면 그대로 둬요.');
     var more = ctx.el('details', 'cap-more'); more.open = C.more;
     more.addEventListener('toggle', function () { C.more = more.open; });
     more.appendChild(ctx.el('summary', null, '자세한 설정'));

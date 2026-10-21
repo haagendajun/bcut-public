@@ -221,8 +221,6 @@ body.lt-open{overflow:hidden}
 .cap-sec{display:flex;align-items:center;gap:8px;margin:18px 0 8px}
 .cap-num{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--on-accent);font-size:12px;font-weight:700}
 .cap-body input[type=text]{width:100%}
-.cap-grid{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center}
-.cap-kind{display:flex;flex-direction:column;grid-row:span 2}
 .cap-kw{font-size:12px;color:var(--muted)}
 .cap-stars,.cap-colors{display:flex;align-items:center;gap:4px}
 .cap-star{padding:0 2px;font-size:20px;line-height:1;background:transparent;box-shadow:none;color:var(--p2)}
@@ -324,3 +322,11 @@ button.danger.on{background:var(--p1);color:#fff;box-shadow:none}
 .cap-doc{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 14px;cursor:pointer;font-size:14px}
 .cap-doc.on{border-color:var(--accent);background:var(--accent-soft);font-weight:700}
 .cap-manual{margin-top:10px}.cap-manual summary{cursor:pointer;color:var(--muted);font-size:13px;margin-bottom:6px}
+.cap-sub{margin:-2px 0 10px}
+.cap-kcard{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0;background:var(--surface)}
+.cap-khead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.cap-kleft{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.cap-kleft b{font-size:16px}
+.cap-ksum{font-size:13px;color:var(--faint);white-space:nowrap}.cap-ksum.on{color:var(--accent);font-weight:700}
+.cap-row{display:flex;align-items:center;gap:12px;min-height:34px}
+.cap-rl{width:36px;font-size:13px;color:var(--muted);flex:none}
+.cap-sw{width:26px;height:26px}
