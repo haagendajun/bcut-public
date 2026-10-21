@@ -21,10 +21,14 @@
     return ctx.api('GET', '/api/records').then(function (d) { R.data = d; ctx.rerender(); })
       .catch(function (e) { R.error = e.message; ctx.rerender(); });
   }
-  function act(path, body, okMsg) {
+  /* undo가 있으면 (j -> {text, run}) 초록 글 대신 알림바로 알리고 "되돌려 놓기"를 붙인다 */
+  function act(path, body, okMsg, undo) {
     R.busy = true; R.error = null; R.msg = null; R.confirm = null; ctx.rerender();
     return ctx.api('POST', path, body).then(function (j) {
-      R.busy = false; R.msg = okMsg(j); R.pv = {};
+      R.busy = false; R.pv = {};
+      var u = undo && undo(j);
+      if (u && root.BcutSnack) root.BcutSnack.show(u.text, {label: '되돌려 놓기', onAction: u.run});
+      else R.msg = okMsg(j);
       document.dispatchEvent(new CustomEvent('bcut-records-changed'));
       return load();
     }).catch(function (e) { R.busy = false; R.error = e.message; ctx.rerender(); });
@@ -41,6 +45,25 @@
     return btn(asking ? '정말요? 한 번 더 누르면 실행해요' : label, asking ? 'danger on' : 'danger', function () {
       if (asking) run(); else { R.confirm = id; ctx.rerender(); }
     });
+  }
+  /* 큰 지우기는 정해진 낱말을 직접 써야 실행되는 확인 (낱말이 맞을 때만 버튼이 켜진다) */
+  function typeConfirm(id, label, word, run) {
+    if (R.confirm !== id) return btn(label, 'danger', function () { R.confirm = id; ctx.rerender(); });
+    var box = ctx.el('div', 'rec-type');
+    box.appendChild(ctx.el('span', 'muted', '"' + word + '"라고 써야 실행돼요'));
+    var inp = ctx.el('input'); inp.type = 'text'; inp.setAttribute('aria-label', '확인 낱말 쓰기'); inp.autocomplete = 'off';
+    var go = btn(label, 'danger on', run); go.disabled = true;
+    inp.addEventListener('input', function () { go.disabled = R.busy || inp.value.trim() !== word; });
+    box.appendChild(inp); box.appendChild(go);
+    box.appendChild(btn('취소', 'ghost', function () { R.confirm = null; ctx.rerender(); }));
+    setTimeout(function () { inp.focus(); }, 0);
+    return box;
+  }
+  function restoreById(id) {
+    ctx.api('POST', '/api/records/restore', {id: id}).then(function () {
+      document.dispatchEvent(new CustomEvent('bcut-records-changed'));
+      if (R) { R.msg = '기록을 되돌려 놓았어요.'; load(); }
+    }).catch(function (e) { if (R) { R.error = e.message; ctx.rerender(); } });
   }
   function rowOf(left, right) {   // 왼쪽 글자 · 오른쪽 끝 버튼
     var r = ctx.el('div', 'rec-row'), l = ctx.el('div', 'rec-left'), b = ctx.el('div', 'rec-btns');
@@ -75,6 +98,8 @@
     var del = danger(id + ':trash', '기록 지우기', function () {
       act('/api/records/trash', {kind: 'capture', event: ev.key, doc: cap.path}, function () {
         return 'Capture One 반영 기록을 휴지통으로 옮겼어요. 이 기록으로는 더 이상 되돌릴 수 없어요 (지운 기록에서 되돌려 놓을 수 있어요).';
+      }, function (j) {
+        return {text: 'Capture One 반영 기록을 휴지통으로 옮겼어요', run: function () { restoreById(j.id); }};
       });
     });
     var left = [ctx.el('b', null, cap.document + ' · ' + stamp(cap.created_at)), ctx.el('span', 'muted', what)];
@@ -113,9 +138,11 @@
         return '표시 ' + j.cleared + '장을 해제했어요. 이력은 남아 있어요. Capture One에 이미 붙인 키워드·별점은 그대로예요.';
       });
     }) : ctx.el('span'));
-    foot.appendChild(danger('event:' + ev.key, '이 행사 기록 지우기', function () {
+    foot.appendChild(typeConfirm('event:' + ev.key, '이 행사 기록 지우기', '지우기', function () {
       act('/api/records/trash', {kind: 'event', event: ev.key}, function () {
         return '행사 기록(표시·훑기)을 휴지통으로 옮겼어요. 사진과 Capture One은 그대로예요.';
+      }, function (j) {
+        return {text: '"' + ev.name + '" 기록을 휴지통으로 옮겼어요', run: function () { restoreById(j.id); }};
       });
     }));
     box.appendChild(foot);

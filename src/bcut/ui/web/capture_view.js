@@ -51,11 +51,22 @@
     });
     return any ? out : null;
   }
+  var BUSY = {
+    preview: 'Capture One에서 사진을 찾아 몇 장에 붙을지 세고 있어요. 아무것도 바꾸지 않아요.',
+    'apply+': '이름표를 붙이고, 고른 별점·색을 준 뒤 다시 읽어 확인하고 있어요. 사진 수가 많으면 조금 걸려요.',
+    rollback: '되돌릴 수 있는 것을 찾고 있어요. 아무것도 바꾸지 않아요.',
+    'rollback+': '붙였던 것을 이전 값으로 되돌리고 있어요.'
+  };
+  function busyBar(p) {
+    var w = ctx.el('div', 'ind'), bar = ctx.el('div', 'ind-bar');
+    bar.setAttribute('role', 'progressbar'); bar.setAttribute('aria-busy', 'true'); bar.setAttribute('aria-label', 'Capture One 작업 중');
+    w.appendChild(bar); w.appendChild(ctx.el('div', 'ind-text', C.busyText || '잠시만요…')); p.appendChild(w);
+  }
   function call(action, commit) {
     var cat = C.catalog.trim();
     if (!cat) { C.error = '카탈로그나 세션 이름을 입력해 주세요.'; ctx.rerender(); return; }
     put(KEY, cat);
-    C.busy = true; C.error = null; ctx.rerender();
+    C.busy = true; C.error = null; C.busyText = BUSY[action + (commit ? '+' : '')] || BUSY.preview; ctx.rerender();
     var body = {action: action, catalog: cat, commit: !!commit, allow_partial: C.partial};
     var st = chosenStyle();
     if (st) { body.style = st; body.overwrite = C.overwrite; }
@@ -240,17 +251,32 @@
     more.appendChild(inp); body.appendChild(more);
   }
 
+  /* 위쪽 단계 표시: 지금 어디까지 왔는지 한눈에 (① 어디에 ② 무엇을 ③ 미리보기·결과) */
+  function stepper() {
+    var at = C.res && !C.res.aborted ? 3 : (C.catalog.trim() ? 2 : 1);
+    var w = ctx.el('ol', 'cap-steps');
+    [['어디에', 1], ['무엇을', 2], ['결과 확인', 3]].forEach(function (s) {
+      var li = ctx.el('li', s[1] < at ? 'done' : s[1] === at ? 'now' : '');
+      if (s[1] === at) li.setAttribute('aria-current', 'step');
+      li.appendChild(ctx.el('span', 'cap-step-n', s[1] < at ? '✓' : String(s[1])));
+      li.appendChild(ctx.el('span', null, s[0]));
+      w.appendChild(li);
+    });
+    return w;
+  }
+
   function render() {
     if (!C) return null;
     var modal = ctx.el('div', 'modal'), p = ctx.el('div', 'panel cap-panel');
     var head = ctx.el('div', 'cap-head'); head.appendChild(ctx.el('h2', null, 'Capture One에도 표시하기'));
     var x = ctx.el('button', 'ghost cap-x', '✕'); x.type = 'button'; x.setAttribute('aria-label', '닫기'); x.addEventListener('click', close);
     head.appendChild(x); p.appendChild(head);
+    p.appendChild(stepper());
     var body = ctx.el('div', 'cap-body');
     section(body, '1', '어디에 붙일까요?');
     renderDocs(body);
     renderChoices(body);
-    if (C.busy) note(body, '잠시만요… Capture One과 이야기하는 중이에요.');
+    if (C.busy) { busyBar(body); setTimeout(function () { var r = document.querySelector('.ind'); if (r) r.scrollIntoView({block: 'nearest'}); }, 0); }
     if (C.error) body.appendChild(box('bad', C.error));
     if (C.res) { section(body, '3', '결과'); body.lastChild.className += ' cap-result'; if (C.res.action === 'rollback') renderBackResult(body, C.res); else renderApplyResult(body, C.res); }
     else note(body, '먼저 "미리보기"로 몇 장에 무엇이 붙는지 확인해요. 미리보기는 Capture One을 바꾸지 않아요.', 'muted cap-hint');

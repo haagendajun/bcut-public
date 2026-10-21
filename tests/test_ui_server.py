@@ -490,7 +490,7 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     assert TOKEN in html and "__TOKEN__" not in html
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
                         ("/review.js", "javascript"), ("/review_help.js", "javascript"), ("/sort_view.js", "javascript"),
-                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"), ("/records_view.js", "javascript"), ("/finish_view.js", "javascript"), ("/home_view.js", "javascript"), ("/filter_view.js", "javascript"),
+                        ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"), ("/records_view.js", "javascript"), ("/snack.js", "javascript"), ("/finish_view.js", "javascript"), ("/home_view.js", "javascript"), ("/filter_view.js", "javascript"),
                         ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
@@ -503,7 +503,7 @@ def test_web_files_follow_the_security_rules():
     index = (web / "index.html").read_text(encoding="utf-8")
     assert "<script>" not in index and "onclick" not in index  # 인라인 스크립트 없음 (CSP)
     for f in ("index.html", "app.js", "logic.js", "review_logic.js", "review.js", "sort_view.js", "migrate.js",
-              "cloud_view.js", "capture_view.js", "records_view.js", "finish_view.js", "home_view.js", "filter_view.js", "review_help.js", "style.css"):
+              "cloud_view.js", "capture_view.js", "records_view.js", "snack.js", "finish_view.js", "home_view.js", "filter_view.js", "review_help.js", "style.css"):
         text = (web / f).read_text(encoding="utf-8")
         assert "http://" not in text and "https://" not in text, f  # 외부 주소 없음
         assert "innerHTML" not in text and "eval(" not in text and "document.write" not in text, f
@@ -513,7 +513,7 @@ def test_web_files_follow_the_security_rules():
 def test_screen_files_avoid_retired_and_hard_words():
     web = Path(srv.__file__).parent / "web"
     for f in ("index.html", "app.js", "review.js", "review_logic.js", "sort_view.js", "migrate.js",
-              "cloud_view.js", "capture_view.js", "records_view.js", "finish_view.js", "home_view.js", "filter_view.js", "review_help.js"):
+              "cloud_view.js", "capture_view.js", "records_view.js", "snack.js", "finish_view.js", "home_view.js", "filter_view.js", "review_help.js"):
         text = (web / f).read_text(encoding="utf-8")
         for word in ("남기기", "삭제", "B컷 후보"):  # 옛 용어와 어려운 말 (IA 용어 규칙, spec SC-08)
             assert word not in text, (f, word)

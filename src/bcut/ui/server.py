@@ -171,6 +171,7 @@ STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "t
           "/cloud_view.js": ("cloud_view.js", "text/javascript"),
           "/capture_view.js": ("capture_view.js", "text/javascript"),
           "/records_view.js": ("records_view.js", "text/javascript"),
+          "/snack.js": ("snack.js", "text/javascript"),
           "/finish_view.js": ("finish_view.js", "text/javascript"),
           "/home_view.js": ("home_view.js", "text/javascript"),
           "/filter_view.js": ("filter_view.js", "text/javascript"),

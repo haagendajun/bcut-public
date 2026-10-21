@@ -173,8 +173,12 @@
   function itemFor(r, index) {
     var rescued = L.isRescued(r, S.rescued);
     var it = el('div', 'item' + (rescued ? ' saved' : ''));
-    var im = el('div', 'img'); im.tabIndex = 0;
-    var img = document.createElement('img'); img.loading = 'lazy'; img.alt = r.file; img.src = thumbUrl(r.file);
+    var im = el('div', 'img loading'); im.tabIndex = 0;
+    var img = document.createElement('img'); img.loading = 'lazy'; img.alt = r.file;
+    function loaded() { im.classList.remove('loading'); }
+    img.addEventListener('load', loaded); img.addEventListener('error', loaded);
+    img.src = thumbUrl(r.file);
+    if (img.complete) loaded();
     im.appendChild(img);
     var tier = L.tierOf(r, S.rescued);
     var mk = S.markMap[r.file];
@@ -229,6 +233,17 @@
     });
     if (!shown) w.appendChild(el('div', 'empty', '보여 줄 사진이 없어요.'));
   }
+  /* 보기 전환 알약이 이전 자리에서 새 자리로 미끄러진다 (동작 줄이기를 켜면 그냥 바뀐다) */
+  function slideSeg() {
+    var from = S.segFrom; S.segFrom = null;
+    if (from == null || !window.matchMedia || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    requestAnimationFrame(function () {
+      var now = document.querySelector('.res-details .seg [aria-pressed=true]');
+      if (!now || !now.animate) return;
+      var dx = from - now.getBoundingClientRect().left;
+      if (Math.abs(dx) > 1) now.animate([{transform: 'translateX(' + dx + 'px)'}, {transform: 'none'}], {duration: 260, easing: 'ease-out'});
+    });
+  }
   function renderAll(w, c) {
     Filters.render({el: el, S: S, L: L, render: render, gridOf: gridOf}, w, c);
   }
@@ -260,7 +275,11 @@
     var seg = el('div', 'seg');
     [['priority', '우선순위로 보기'], ['all', '전체 목록']].forEach(function (m) {
       var b = el('button', null, m[1]); b.setAttribute('aria-pressed', String(S.mode === m[0]));
-      b.addEventListener('click', function () { S.mode = m[0]; render(); }); seg.appendChild(b);
+      b.addEventListener('click', function () {
+        var cur = seg.querySelector('[aria-pressed=true]');
+        S.segFrom = cur ? cur.getBoundingClientRect().left : null;
+        S.mode = m[0]; render(); slideSeg();
+      }); seg.appendChild(b);
     });
     tb.appendChild(seg); tb.appendChild(el('span', 'grow'));
     tb.appendChild(el('label', null, '사진 크기'));

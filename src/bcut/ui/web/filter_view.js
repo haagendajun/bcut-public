@@ -83,7 +83,17 @@
       bar.appendChild(clear);
     }
     w.appendChild(bar);
-    if (!S.list.length) w.appendChild(el('div', 'empty', '이 조건에 맞는 사진이 없어요.'));
+    if (!S.list.length) {
+      var em = el('div', 'empty empty-card');
+      em.appendChild(el('b', null, '이 조건에 맞는 사진이 없어요'));
+      em.appendChild(el('p', 'muted', filtered ? '걸러 둔 조건이 너무 좁을 수 있어요. 풀면 전체 ' + c.total + '장을 다시 볼 수 있어요.' : '이 행사에는 보여 줄 사진이 없어요.'));
+      if (filtered) {
+        var un = el('button', 'primary', '필터 모두 풀기');
+        un.addEventListener('click', function () { S.tier = 'all'; S.reason = null; S.mark = null; x.render(); });
+        em.appendChild(un);
+      }
+      w.appendChild(em);
+    }
     else w.appendChild(x.gridOf(S.list, 0));
   }
 
