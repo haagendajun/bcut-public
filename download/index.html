@@ -7,164 +7,127 @@
 <meta name="description" content="눈 감은 컷, 흔들린 컷은 앱이 먼저 표시하고, 좋은 컷은 큰 화면에서 키보드로 고르세요. 사진은 내 맥 밖으로 나가지 않아요.">
 <link rel="icon" href="/icon.svg">
 <style>
-:root{
-  --bg:#fbfbfd;--bg2:#f2f3f7;--card:#fff;--tx:#14151a;--mut:#5f6470;--line:rgba(20,21,26,.1);
-  --acc:#0a66d6;--acc2:#5b8cff;--on:#fff;--ok:#1f8a4c;--warn:#c4620a;--bad:#d23b3b;
-  --lt:#0e0f13;--lt2:#181a20;--lt-tx:#eef0f5;--lt-mut:#8d93a1;--shadow:0 30px 80px rgba(20,30,70,.18),0 6px 18px rgba(20,30,70,.08);
-}
-@media (prefers-color-scheme:dark){:root{
-  --bg:#0b0c10;--bg2:#12141a;--card:#171a21;--tx:#f1f3f8;--mut:#a0a6b4;--line:rgba(255,255,255,.1);
-  --acc:#5b9bff;--acc2:#8bb3ff;--on:#07101f;--ok:#5fd18a;--warn:#ffb454;--bad:#ff7b7b;
-  --shadow:0 30px 80px rgba(0,0,0,.55),0 6px 18px rgba(0,0,0,.4);}}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--tx);font:17px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+:root{--bg:#e9e9ec;--win:#f6f6f7;--card:#fbfbfc;--tx:#1b1b1d;--mut:#62626b;--line:rgba(0,0,0,.09);--pill:#26262a;--pill-tx:#fff;--glass:rgba(255,255,255,.6);--glass-line:rgba(255,255,255,.85);--shadow:0 24px 50px rgba(30,30,70,.16);--acc:#2f6bff;--warn:#7a4a00;--warn-bg:#fff1d6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d0d10;--win:#16161a;--card:#1d1d22;--tx:#f2f2f5;--mut:#a3a3ad;--line:rgba(255,255,255,.1);--pill:#f2f2f5;--pill-tx:#16161a;--glass:rgba(255,255,255,.12);--glass-line:rgba(255,255,255,.22);--shadow:0 24px 50px rgba(0,0,0,.5);--acc:#7aa2ff;--warn:#ffcf8a;--warn-bg:rgba(255,181,84,.16)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--tx);font:17px/1.65 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",Pretendard,system-ui,sans-serif;-webkit-font-smoothing:antialiased;padding:20px}
+h1,h2,h3,.lead,p{word-break:keep-all}
 a{color:var(--acc)}
-.wrap{max-width:1040px;margin:0 auto;padding:0 24px}
-nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid var(--line)}
-nav .wrap{display:flex;align-items:center;justify-content:space-between;height:58px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--tx);text-decoration:none}
-.brand img{width:30px;height:30px;border-radius:8px}
-.nav-links{display:flex;gap:22px;align-items:center;font-size:15px}
-.nav-links a{color:var(--mut);text-decoration:none}.nav-links a:hover{color:var(--tx)}
-.pill{display:inline-block;background:var(--acc);color:var(--on)!important;font-weight:700;padding:8px 18px;border-radius:999px}
-.hero{text-align:center;padding:76px 0 36px;background:radial-gradient(900px 380px at 50% -80px,color-mix(in srgb,var(--acc) 16%,transparent),transparent)}
-.hero img.app{width:104px;height:104px;border-radius:24px;box-shadow:0 14px 34px rgba(10,60,160,.28)}
-h1,.sub,.lead,.card p,.step p{word-break:keep-all}
-h1{font-size:clamp(34px,6vw,60px);line-height:1.12;letter-spacing:-.025em;margin:26px 0 16px}
-h1 em{font-style:normal;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{max-width:640px;margin:0 auto 30px;color:var(--mut);font-size:19px}
-.cta{display:inline-flex;align-items:center;gap:10px;background:var(--acc);color:var(--on);text-decoration:none;font-weight:700;font-size:18px;padding:16px 30px;border-radius:999px;box-shadow:0 10px 26px color-mix(in srgb,var(--acc) 40%,transparent);transition:transform .15s}
-.cta:hover{transform:translateY(-2px)}
-.cta:focus-visible,.pill:focus-visible,summary:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
-.meta{margin-top:14px;color:var(--mut);font-size:14px}
-.link2{display:inline-block;margin-left:16px;font-size:16px}
-/* 화면 예시 (그림) */
-.stage{max-width:940px;margin:46px auto 0;padding:0 24px}
-.win{background:var(--lt);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;border:1px solid rgba(255,255,255,.08);text-align:left}
-.bar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:var(--lt2)}
-.bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.bar i:nth-child(2){background:#febc2e}.bar i:nth-child(3){background:#28c840}
-.bar span{margin-left:10px;color:var(--lt-mut);font-size:13px}
-.body{display:grid;grid-template-columns:1fr 240px;min-height:340px}
-.shot{position:relative;margin:16px;border-radius:10px;overflow:hidden;background:
- radial-gradient(circle at 32% 38%,#d9b49a 0 9%,transparent 9.5%),radial-gradient(circle at 56% 40%,#c99d86 0 8%,transparent 8.5%),
- radial-gradient(ellipse at 30% 78%,#2a3350 0 24%,transparent 25%),radial-gradient(ellipse at 56% 80%,#3b2f45 0 24%,transparent 25%),
- linear-gradient(160deg,#394a63,#1d2433 60%,#2a1f2e)}
-.box{position:absolute;border:2px solid #ffd54a;border-radius:6px;box-shadow:0 0 0 1px rgba(0,0,0,.4)}
-.box.a{left:22%;top:20%;width:20%;height:32%}.box.b{left:47%;top:22%;width:18%;height:30%}
-.tag{position:absolute;left:14px;bottom:14px;background:rgba(0,0,0,.6);color:#fff;font-size:13px;padding:5px 12px;border-radius:999px}
-.side{padding:18px 18px 18px 6px;color:var(--lt-tx);font-size:14px}
-.side h4{margin:0 0 4px;font-size:12px;letter-spacing:.06em;color:var(--lt-mut);font-weight:600}
-.badge{display:inline-block;background:rgba(255,181,84,.16);color:#ffb454;border-radius:999px;padding:3px 10px;font-size:13px;margin:2px 0 12px}
-.eyes{display:flex;gap:8px;margin:6px 0 16px}.eyes b{flex:1;height:46px;border-radius:8px;background:#2a2d36;position:relative}
-.eyes b:after{content:"";position:absolute;left:18%;right:18%;top:50%;height:3px;border-radius:3px;background:#9aa0ae}
-.keys{display:flex;gap:6px;flex-wrap:wrap}
-.key{background:#22252e;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:5px 9px;font-size:13px}
-.key kbd{font:700 13px ui-monospace,Menlo,monospace;color:#fff;margin-right:5px}
-.strip{display:flex;gap:8px;padding:12px 16px 16px;background:var(--lt2);overflow:hidden}
-.strip u{flex:0 0 74px;height:48px;border-radius:6px;background:linear-gradient(150deg,#46597a,#232a3b);opacity:.55;text-decoration:none}
-.strip u.on{opacity:1;outline:2px solid #fff}.strip u.pk{outline:2px solid #4cd38a;opacity:1}.strip u.mb{outline:2px solid #ffb454;opacity:1}
-.note{margin:10px 0 0;color:var(--mut);font-size:13px;text-align:center}
-section{padding:84px 0}
-section.alt{background:var(--bg2)}
-.eyebrow{color:var(--acc);font-weight:700;font-size:14px;letter-spacing:.04em;margin:0 0 8px}
-h2{font-size:clamp(26px,4vw,38px);line-height:1.25;letter-spacing:-.02em;margin:0 0 14px}
-.lead{color:var(--mut);max-width:620px;margin:0 0 36px}
+.sheet{max-width:1120px;margin:0 auto;background:var(--win);border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+nav{display:flex;align-items:center;justify-content:space-between;padding:22px 40px;font-size:15px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--tx);text-decoration:none}
+.brand img{width:28px;height:28px;border-radius:8px}
+.nav-r{display:flex;gap:28px;align-items:center}.nav-r a{color:var(--mut);text-decoration:none}.nav-r a:hover{color:var(--tx)}
+.btn{display:inline-flex;align-items:center;gap:8px;background:var(--pill);color:var(--pill-tx)!important;font-weight:700;text-decoration:none;border-radius:999px;padding:11px 22px;font-size:15px}
+.btn.big{padding:17px 34px;font-size:17px;box-shadow:0 14px 28px rgba(0,0,0,.28);transition:transform .15s}.btn.big:hover{transform:translateY(-2px)}
+.btn:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.hero{position:relative;text-align:center;padding:54px 24px 0;height:730px}
+.hero h1{font-size:clamp(40px,7.4vw,84px);letter-spacing:-.04em;line-height:1.04;margin:0;font-weight:800;position:relative;z-index:1}
+.hero .sub{max-width:560px;margin:22px auto 0;color:var(--mut);font-size:18px;position:relative;z-index:1}
+.fan{position:absolute;left:0;right:0;top:300px;height:300px}
+.g{position:absolute;width:150px;height:200px;border-radius:22px;border:1px solid var(--glass-line);box-shadow:0 18px 36px rgba(40,40,90,.2);overflow:hidden;backdrop-filter:blur(8px)}
+.g .ph{position:absolute;inset:8px 8px 44px;border-radius:15px;background:radial-gradient(circle at 35% 38%,rgba(255,255,255,.5) 0 9%,transparent 10%),radial-gradient(circle at 62% 42%,rgba(255,255,255,.4) 0 8%,transparent 9%),linear-gradient(160deg,var(--a),var(--b))}
+.g .ch{position:absolute;left:10px;right:10px;bottom:10px;display:flex;justify-content:space-between;gap:6px;font-size:12px;font-weight:700;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:5px 10px;color:var(--tx);white-space:nowrap}
+.cta-wrap{position:absolute;left:0;right:0;top:566px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:12px}
+.cta-wrap small{color:var(--mut);font-size:13px;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:4px 12px;backdrop-filter:blur(8px)}
+.strip{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:18px 40px;border-top:1px solid var(--line);font-size:14px;color:var(--mut)}
+.keys span{display:inline-block;border:1px solid var(--line);border-radius:9px;padding:3px 10px;margin-right:6px;background:var(--glass);color:var(--tx)}
+section{padding:88px 40px}
+.eyebrow{color:var(--acc);font-weight:800;font-size:14px;letter-spacing:.04em;margin:0 0 10px}
+h2{font-size:clamp(28px,4.6vw,46px);line-height:1.15;letter-spacing:-.03em;margin:0 0 14px;font-weight:800}
+.lead{color:var(--mut);max-width:620px;margin:0 0 38px}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:26px}
-.card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;background:color-mix(in srgb,var(--acc) 12%,transparent);margin-bottom:14px}
-.card h3{margin:0 0 8px;font-size:19px}.card p{margin:0;color:var(--mut);font-size:16px}
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;counter-reset:s}
-.step{position:relative;padding:26px 24px 24px;background:var(--card);border:1px solid var(--line);border-radius:20px;counter-increment:s}
-.step:before{content:counter(s);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--acc);color:var(--on);font-weight:800;margin-bottom:14px}
-.step h3{margin:0 0 6px;font-size:18px}.step p{margin:0;color:var(--mut);font-size:16px}
-.dl{background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 14%,var(--card)),var(--card));border:1px solid var(--line);border-radius:28px;padding:44px 28px;text-align:center}
-.dl code{display:block;margin:14px auto 0;max-width:620px;font:12.5px ui-monospace,Menlo,monospace;color:var(--mut);word-break:break-all}
-.inst{max-width:700px;margin:34px auto 0;text-align:left}
-.inst ol{margin:0;padding-left:22px}.inst li{margin:10px 0}
-.hint{background:color-mix(in srgb,var(--warn) 12%,transparent);border-left:4px solid var(--warn);padding:12px 16px;border-radius:10px;font-size:15px;color:var(--tx);margin-top:18px}
-details{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:4px 20px;margin:10px 0}
-summary{cursor:pointer;font-weight:700;padding:14px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
+.card{background:var(--glass);border:1px solid var(--glass-line);border-radius:24px;padding:26px;box-shadow:0 12px 28px rgba(30,30,70,.07);backdrop-filter:blur(10px)}
+.card .ic{width:46px;height:46px;border-radius:14px;margin-bottom:16px;background:linear-gradient(150deg,var(--a),var(--b));display:grid;place-items:center;font-weight:800;color:#1b1b1d;font-size:15px}
+.card h3{margin:0 0 8px;font-size:20px}.card p{margin:0;color:var(--mut);font-size:16px}
+.alt{background:color-mix(in srgb,var(--bg) 55%,transparent)}
+.steps{counter-reset:s}.step{counter-increment:s}
+.step:before{content:counter(s);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--pill);color:var(--pill-tx);font-weight:800;margin-bottom:14px}
+.dl{position:relative;text-align:center;background:linear-gradient(135deg,rgba(143,183,255,.35),rgba(201,166,255,.3) 50%,rgba(255,179,209,.35));border:1px solid var(--glass-line);border-radius:32px;padding:50px 28px}
+.dl img{width:72px;height:72px;border-radius:18px}.dl h2{margin-top:16px}
+.dl .lead{margin:0 auto 24px}
+.dl code{display:block;margin:16px auto 0;max-width:640px;font:12.5px ui-monospace,Menlo,monospace;color:var(--mut);word-break:break-all}
+.inst{max-width:700px;margin:36px auto 0;text-align:left;background:var(--glass);border:1px solid var(--glass-line);border-radius:22px;padding:24px 28px}
+.inst h2{font-size:22px;margin-bottom:10px}.inst ol{margin:0;padding-left:22px}.inst li{margin:10px 0}
+.hint{background:var(--warn-bg);color:var(--warn);padding:12px 16px;border-radius:14px;font-size:15px;margin-top:16px}
+details{background:var(--glass);border:1px solid var(--glass-line);border-radius:18px;padding:4px 22px;margin:10px 0}
+summary{cursor:pointer;font-weight:700;padding:15px 0;list-style:none;display:flex;justify-content:space-between;gap:12px}
 summary::-webkit-details-marker{display:none}summary:after{content:"＋";color:var(--acc)}details[open] summary:after{content:"－"}
-details p,details ul{margin:0 0 16px;color:var(--mut);font-size:16px}
-code.i{font:14px ui-monospace,Menlo,monospace;background:var(--bg2);padding:2px 7px;border-radius:6px;color:var(--tx);word-break:break-all}
-footer{padding:40px 0 60px;color:var(--mut);font-size:14px;text-align:center;border-top:1px solid var(--line)}
-@media(max-width:760px){.grid,.steps{grid-template-columns:1fr}.body{grid-template-columns:1fr}.shot{min-height:210px}.side{padding:0 16px 16px}.nav-links a.hide{display:none}.hero{padding-top:48px}}
+details p{margin:0 0 16px;color:var(--mut);font-size:16px}
+code.i{font:14px ui-monospace,Menlo,monospace;background:var(--line);padding:2px 7px;border-radius:6px;color:var(--tx);word-break:break-all}
+footer{padding:30px 40px 44px;color:var(--mut);font-size:14px;text-align:center;border-top:1px solid var(--line)}
+@media(max-width:900px){.hero{height:690px}.g{width:112px;height:152px}.g .ph{inset:6px 6px 36px}.g .ch{font-size:11px;padding:3px 8px;bottom:7px;left:7px;right:7px}.fan{top:330px}.cta-wrap{top:560px}}
+@media(max-width:760px){body{padding:10px}nav{padding:16px 18px}.nav-r a.hide{display:none}.grid{grid-template-columns:1fr}section{padding:60px 20px}.strip{padding:16px 20px}.hero h1{font-size:40px}.hero .sub{font-size:16px}.g .ch span+span{display:none}.fan{top:340px}.cta-wrap{top:572px}.hero{height:700px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<nav><div class="wrap">
+<div class="sheet">
+<nav>
   <a class="brand" href="#top"><img src="/icon.svg" alt="">bcut</a>
-  <div class="nav-links"><a class="hide" href="#features">기능</a><a class="hide" href="#install">설치</a><a class="hide" href="#faq">질문</a><a class="pill" href="#download">다운로드</a></div>
-</div></nav>
+  <div class="nav-r"><a class="hide" href="#features">기능</a><a class="hide" href="#install">설치</a><a class="hide" href="#faq">질문</a><a class="btn" href="#download">다운로드</a></div>
+</nav>
 
-<header class="hero" id="top"><div class="wrap">
-  <img class="app" src="/icon.svg" alt="bcut 앱 아이콘">
-  <h1>행사 사진,<br><em>좋은 컷만</em> 빠르게 고르세요</h1>
-  <p class="sub">눈을 감았거나 흔들린 것 같은 컷은 앱이 먼저 표시해 두고, 좋은 컷은 큰 화면에서 키보드로 한 장씩 골라요. 사진은 내 맥 밖으로 나가지 않아요.</p>
-  <a class="cta" href="https://github.com/haagendajun/bcut-releases/releases/download/v0.3.4/bcut-0.3.4-mac-arm64.zip">⬇&nbsp; 맥용 다운로드</a><a class="link2" href="#install">설치 방법 보기 →</a>
-  <p class="meta">v0.3.4 · Apple 칩(M1 이후) 맥 · 약 155MB · 무료</p>
-</div>
-<div class="stage">
-  <div class="win" role="img" aria-label="bcut 훑기 화면 예시: 큰 사진과 얼굴 박스, 오른쪽에 의심 이유, 아래에 필름스트립">
-    <div class="bar"><i></i><i></i><i></i><span>bcut · 훑기 · 42 / 300</span></div>
-    <div class="body">
-      <div class="shot"><div class="box a"></div><div class="box b"></div><div class="tag">👁 눈 감김 의심 · 왼쪽 사람</div></div>
-      <div class="side">
-        <h4>도구의 의견</h4><span class="badge">⚠ 눈을 감은 것 같아요</span>
-        <h4>눈 확대</h4><div class="eyes"><b></b><b></b></div>
-        <h4>표시하기</h4>
-        <div class="keys"><span class="key"><kbd>S</kbd>셀렉</span><span class="key"><kbd>M</kbd>보류</span><span class="key"><kbd>X</kbd>버릴 컷</span></div>
-      </div>
-    </div>
-    <div class="strip"><u class="pk"></u><u></u><u class="mb"></u><u></u><u class="on"></u><u></u><u></u><u></u><u></u></div>
+<header class="hero" id="top">
+  <h1>좋은 컷만,<br>우아하게 고르세요</h1>
+  <p class="sub">눈을 감았거나 흔들린 것 같은 컷은 앱이 먼저 표시해 두고, 좋은 컷은 큰 화면에서 키보드로 한 장씩 골라요.</p>
+  <div class="fan" role="img" aria-label="셀렉, 보류, 버릴 컷 표시가 붙은 사진 카드 예시 그림">
+    <div class="g" style="left:-1%;top:78px;transform:rotate(-12deg);--a:#ffc2dc;--b:#ff7eb3"><div class="ph"></div><div class="ch"><span>보류</span><span>●</span></div></div>
+    <div class="g" style="left:14%;top:44px;transform:rotate(-7deg);--a:#c9c6ff;--b:#8f8bff"><div class="ph"></div><div class="ch"><span>눈 감김 의심</span><span>⚠</span></div></div>
+    <div class="g" style="left:31%;top:6px;transform:rotate(-3deg);--a:#c6f7a8;--b:#4ad66d;width:calc(150px * 1.13);height:226px"><div class="ph"></div><div class="ch"><span>셀렉</span><span>★ 4</span></div></div>
+    <div class="g" style="left:52%;top:0;transform:rotate(3deg);--a:#b7f3ee;--b:#58c6e8"><div class="ph"></div><div class="ch"><span>셀렉</span><span>✓</span></div></div>
+    <div class="g" style="left:68%;top:40px;transform:rotate(8deg);--a:#e4e4e8;--b:#9a9aa6"><div class="ph"></div><div class="ch"><span>버릴 컷</span><span>✕</span></div></div>
+    <div class="g" style="left:84%;top:76px;transform:rotate(13deg);--a:#f4ffb0;--b:#d5f23c"><div class="ph"></div><div class="ch"><span>보류</span><span>●</span></div></div>
   </div>
-  <p class="note">화면 예시 그림이에요 (실제 사진이 아니에요)</p>
-</div></header>
+  <div class="cta-wrap">
+    <a class="btn big" href="https://github.com/haagendajun/bcut-releases/releases/download/v0.3.4/bcut-0.3.4-mac-arm64.zip">⬇&nbsp; 맥용 다운로드</a>
+    <small>v0.3.4 · Apple 칩(M1 이후) 맥 · 약 155MB · 무료</small>
+  </div>
+</header>
+<div class="strip"><div class="keys"><span>S 셀렉</span><span>M 보류</span><span>X 버릴 컷</span><span>⌘Z 되돌리기</span></div><div>사진은 내 맥 밖으로 나가지 않아요 · 화면 예시 그림이에요</div></div>
 
-<section id="features"><div class="wrap">
+<section id="features">
   <p class="eyebrow">이런 앱이에요</p>
   <h2>고르는 일에 집중하게 도와줘요</h2>
   <p class="lead">버릴 컷을 일일이 찾는 시간을 줄이고, 좋은 컷을 고르는 데 쓰세요.</p>
   <div class="grid">
-    <div class="card"><div class="ic">🔍</div><h3>먼저 찾아 둬요</h3><p>눈을 감았거나 흔들린 것 같은 컷에 이유와 함께 표시해요. 숨기지 않고 흐리게만 보여 줘서 최종 판단은 내가 해요.</p></div>
-    <div class="card"><div class="ic">⌨️</div><h3>키보드로 훑어요</h3><p>큰 사진 한 장씩, <b>S</b> 셀렉 · <b>M</b> 보류 · <b>X</b> 버릴 컷. 누르면 바로 다음 사진으로 넘어가고, ⌘Z로 되돌려요.</p></div>
-    <div class="card"><div class="ic">🔒</div><h3>내 맥 안에서만</h3><p>검사와 정리는 모두 내 컴퓨터에서 해요. 원본은 보기만 하고, 나누어 담을 때는 새 폴더에 사본을 만들어요.</p></div>
+    <div class="card"><div class="ic" style="--a:#ffe3a8;--b:#ffb454">찾기</div><h3>먼저 찾아 둬요</h3><p>눈을 감았거나 흔들린 것 같은 컷에 이유와 함께 표시해요. 숨기지 않고 흐리게만 보여 줘서 최종 판단은 내가 해요.</p></div>
+    <div class="card"><div class="ic" style="--a:#c6f7a8;--b:#4ad66d">키</div><h3>키보드로 훑어요</h3><p>큰 사진 한 장씩, <b>S</b> 셀렉 · <b>M</b> 보류 · <b>X</b> 버릴 컷. 누르면 바로 다음 사진으로 넘어가고, ⌘Z로 되돌려요.</p></div>
+    <div class="card"><div class="ic" style="--a:#c9c6ff;--b:#8f8bff">내 맥</div><h3>내 맥 안에서만</h3><p>검사와 정리는 모두 내 컴퓨터에서 해요. 원본은 보기만 하고, 나누어 담을 때는 새 폴더에 사본을 만들어요.</p></div>
   </div>
-</div></section>
+</section>
 
-<section><div class="wrap">
+<section class="alt">
   <p class="eyebrow">Capture One과 함께</p>
   <h2>고른 결과를 Capture One에 바로 표시해요</h2>
   <p class="lead">Capture One을 쓰는 분이라면, 폴더를 나누지 않고도 고른 컷을 그 안에서 바로 볼 수 있어요. Capture One이 없어도 bcut은 그대로 쓸 수 있어요.</p>
   <div class="grid">
-    <div class="card"><div class="ic">🏷️</div><h3>표시를 달아 줘요</h3><p>셀렉·보류·버릴 컷마다 이름표(키워드)를 붙여요. Capture One에서 이름표로 검색하면 고른 컷만 모아 볼 수 있어요.</p></div>
-    <div class="card"><div class="ic">🎨</div><h3>별점·색도 골라요</h3><p>어떤 표시에 별점 몇 개, 무슨 색을 줄지 내가 정해요. 기본은 아무것도 주지 않고, 이미 별점이나 색이 있는 사진은 건드리지 않아요.</p></div>
-    <div class="card"><div class="ic">↩️</div><h3>되돌릴 수 있어요</h3><p>반영하기 전에 미리보기로 몇 장이 바뀌는지 보여 줘요. 반영한 뒤에도 기록 관리에서 원래대로 되돌릴 수 있어요. 카탈로그와 세션 둘 다 돼요.</p></div>
+    <div class="card"><div class="ic" style="--a:#b7f3ee;--b:#58c6e8">이름표</div><h3>표시를 달아 줘요</h3><p>셀렉·보류·버릴 컷마다 이름표(키워드)를 붙여요. Capture One에서 이름표로 검색하면 고른 컷만 모아 볼 수 있어요.</p></div>
+    <div class="card"><div class="ic" style="--a:#ffc2dc;--b:#ff7eb3">별·색</div><h3>별점·색도 골라요</h3><p>어떤 표시에 별점 몇 개, 무슨 색을 줄지 내가 정해요. 기본은 아무것도 주지 않고, 이미 별점이나 색이 있는 사진은 건드리지 않아요.</p></div>
+    <div class="card"><div class="ic" style="--a:#f4ffb0;--b:#d5f23c">↩</div><h3>되돌릴 수 있어요</h3><p>반영하기 전에 미리보기로 몇 장이 바뀌는지 보여 줘요. 반영한 뒤에도 기록 관리에서 원래대로 되돌릴 수 있어요. 카탈로그와 세션 둘 다 돼요.</p></div>
   </div>
-</div></section>
+</section>
 
-<section class="alt"><div class="wrap">
+<section>
   <p class="eyebrow">사용 순서</p>
   <h2>세 단계면 끝나요</h2>
   <p class="lead">폴더를 열고, 훑고, 나누어 담아요.</p>
-  <div class="steps">
-    <div class="step"><h3>폴더 열기</h3><p>행사 사진(RAW) 폴더를 끌어다 놓으면 검사가 시작돼요.</p></div>
-    <div class="step"><h3>훑으며 고르기</h3><p>도구가 표시해 둔 컷을 참고해서 셀렉·보류·버릴 컷을 표시해요.</p></div>
-    <div class="step"><h3>폴더로 나누어 담기</h3><p>셀렉·보류 폴더와 판정별 폴더가 새로 만들어져요. 담기 전에 미리보기로 장수를 확인해요.</p></div>
+  <div class="grid steps">
+    <div class="card step"><h3>폴더 열기</h3><p>행사 사진(RAW) 폴더를 끌어다 놓으면 검사가 시작돼요.</p></div>
+    <div class="card step"><h3>훑으며 고르기</h3><p>도구가 표시해 둔 컷을 참고해서 셀렉·보류·버릴 컷을 표시해요.</p></div>
+    <div class="card step"><h3>폴더로 나누어 담기</h3><p>셀렉·보류 폴더와 판정별 폴더가 새로 만들어져요. 담기 전에 미리보기로 장수를 확인해요.</p></div>
   </div>
-</div></section>
+</section>
 
-<section id="download"><div class="wrap">
+<section id="download" class="alt">
   <div class="dl">
-    <img src="/icon.svg" alt="" width="72" height="72" style="border-radius:17px">
-    <h2 style="margin-top:16px">bcut 0.3.4 다운로드</h2>
-    <p class="lead" style="margin:0 auto 22px">Apple 칩(M1 이후) 맥 전용 · 약 155MB · 압축 파일(zip)</p>
-    <a class="cta" href="https://github.com/haagendajun/bcut-releases/releases/download/v0.3.4/bcut-0.3.4-mac-arm64.zip">⬇&nbsp; 맥용 다운로드</a>
+    <img src="/icon.svg" alt="" width="72" height="72">
+    <h2>bcut 0.3.4 다운로드</h2>
+    <p class="lead">Apple 칩(M1 이후) 맥 전용 · 약 155MB · 압축 파일(zip)</p>
+    <a class="btn big" href="https://github.com/haagendajun/bcut-releases/releases/download/v0.3.4/bcut-0.3.4-mac-arm64.zip">⬇&nbsp; 맥용 다운로드</a>
     <code>SHA-256 · eb7a4f64c4449a58d4157ee2d6c8cf18c5f16945959642e7fbc24b6f7bc4e53f</code>
     <div class="inst" id="install">
-      <h2 style="font-size:22px">설치하는 방법</h2>
+      <h2>설치하는 방법</h2>
       <ol>
         <li>내려받은 zip 파일을 더블클릭해서 압축을 풀어요. <b>bcut</b> 앱이 나와요.</li>
         <li>bcut을 <b>응용 프로그램</b> 폴더로 끌어다 놓아요.</li>
@@ -173,12 +136,12 @@ footer{padding:40px 0 60px;color:var(--mut);font-size:14px;text-align:center;bor
       <div class="hint">3번이 필요한 이유: 이 앱은 애플의 정식 서명을 받지 않아서 맥이 "확인되지 않은 개발자"라고 알려 줘요. 위험하다는 뜻이 아니라 서명이 없다는 뜻이에요.</div>
     </div>
   </div>
-</div></section>
+</section>
 
-<section class="alt" id="faq"><div class="wrap">
+<section id="faq">
   <p class="eyebrow">자주 묻는 질문</p>
   <h2>궁금한 점</h2>
-  <div style="max-width:760px;margin-top:26px">
+  <div style="max-width:780px;margin-top:26px">
     <details><summary>사진이 인터넷으로 올라가나요?</summary><p>아니요. 검사와 정리는 모두 내 맥 안에서 해요. 인터넷은 선택 기능(표시 기록을 내 계정에 올리기)을 켰을 때만 쓰고, 그때도 사진 파일은 올라가지 않아요. 켜기 전에 안내가 나와요.</p></details>
     <details><summary>원본 사진이 지워지거나 바뀌나요?</summary><p>아니요. 원본은 보기만 해요. 나누어 담을 때는 새 폴더에 사본을 만들고, 앱에는 사진을 지우는 기능이 없어요.</p></details>
     <details><summary>어떤 사진 형식에서 쓸 수 있나요?</summary><p>카메라 원본(RAW) 중 Canon CR3 사진으로 시험했어요. 다른 형식은 확인하지 못했어요.</p></details>
@@ -188,8 +151,9 @@ footer{padding:40px 0 60px;color:var(--mut);font-size:14px;text-align:center;bor
     <details><summary>"손상되었기 때문에 열 수 없습니다"가 나와요</summary><p>터미널에서 <code class="i">xattr -cr /Applications/bcut.app</code> 을 한 번 실행한 뒤 다시 열어 보세요.</p></details>
     <details><summary>Intel 맥에서도 되나요?</summary><p>아니요. Apple 칩(M1 이후) 맥에서만 열려요.</p></details>
   </div>
-</div></section>
+</section>
 
-<footer><div class="wrap">bcut · 개인이 만든 프로그램이라 보증이 없어요. 문제가 있으면 만든 사람에게 알려 주세요.</div></footer>
+<footer>bcut · 개인이 만든 프로그램이라 보증이 없어요. 문제가 있으면 만든 사람에게 알려 주세요.</footer>
+</div>
 </body>
 </html>

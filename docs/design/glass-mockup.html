@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bcut 시안 · 유리 카드 스타일</title>
+<style>
+:root{--bg:#e6e6e8;--win:#f5f5f6;--tx:#1b1b1d;--mut:#6b6b72;--line:rgba(0,0,0,.08);--pill:#26262a;--pill-tx:#fff;--glass:rgba(255,255,255,.55);--glass-line:rgba(255,255,255,.8);--shadow:0 24px 50px rgba(30,30,60,.18)}
+:root[data-theme=dark]{--bg:#0d0d10;--win:#17171b;--tx:#f2f2f5;--mut:#a0a0aa;--line:rgba(255,255,255,.1);--pill:#f2f2f5;--pill-tx:#17171b;--glass:rgba(255,255,255,.12);--glass-line:rgba(255,255,255,.22);--shadow:0 24px 50px rgba(0,0,0,.5)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,"Apple SD Gothic Neo",Pretendard,system-ui,sans-serif;padding:28px 20px 60px}
+.top{max-width:1000px;margin:0 auto 18px;display:flex;justify-content:space-between;align-items:center}
+.top h1{font-size:15px;margin:0;font-weight:600}.top button{border:1px solid var(--line);background:var(--win);color:var(--tx);border-radius:999px;padding:7px 14px;cursor:pointer;font-size:13px}
+.label{max-width:1000px;margin:34px auto 10px;font-size:13px;color:var(--mut)}
+.win{max-width:1000px;margin:0 auto;background:var(--win);border-radius:22px;overflow:hidden;box-shadow:var(--shadow);position:relative}
+nav{display:flex;align-items:center;justify-content:space-between;padding:20px 34px;font-size:14px}
+nav .l{display:flex;align-items:center;gap:8px;font-weight:700}.dot{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#7ee08a,#58b7ff)}
+nav .r{display:flex;gap:26px;color:var(--mut)}
+.hero{position:relative;height:560px;padding-top:34px;text-align:center}
+.hero h2{font-size:clamp(46px,8vw,86px);letter-spacing:-.04em;line-height:1.02;margin:0;font-weight:800;position:relative;z-index:1;word-break:keep-all}
+.fan{position:absolute;left:0;right:0;top:170px;height:300px}
+.g{position:absolute;width:150px;height:200px;border-radius:20px;border:1px solid var(--glass-line);box-shadow:0 18px 36px rgba(40,40,80,.18);overflow:hidden;backdrop-filter:blur(8px)}
+.g .ph{position:absolute;inset:8px 8px 44px;border-radius:13px;background:radial-gradient(circle at 35% 38%,rgba(255,255,255,.5) 0 9%,transparent 10%),radial-gradient(circle at 62% 42%,rgba(255,255,255,.4) 0 8%,transparent 9%),linear-gradient(160deg,var(--a),var(--b))}
+.g .ch{position:absolute;left:10px;right:10px;bottom:10px;display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:5px 10px;color:var(--tx)}
+.cta{position:absolute;left:50%;top:372px;transform:translateX(-50%);z-index:3;background:var(--pill);color:var(--pill-tx);border-radius:999px;padding:15px 30px;font-weight:700;font-size:16px;text-decoration:none;box-shadow:0 12px 26px rgba(0,0,0,.3)}
+.foot{position:absolute;left:34px;right:34px;bottom:22px;display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mut);z-index:2}
+.keys span{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:3px 9px;margin-right:6px;color:var(--tx);background:var(--glass)}
+.app{padding:20px 26px 26px}
+.abar{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mut);margin-bottom:14px}
+.abar b{color:var(--tx);font-size:15px}
+.stage{display:grid;grid-template-columns:1fr 270px;gap:18px}
+.big{position:relative;height:380px;border-radius:22px;background:radial-gradient(circle at 32% 40%,rgba(255,255,255,.5) 0 8%,transparent 9%),radial-gradient(circle at 58% 42%,rgba(255,255,255,.4) 0 7%,transparent 8%),linear-gradient(150deg,#8fb7ff,#c9a6ff 55%,#ffb3d1);border:1px solid var(--glass-line);box-shadow:var(--shadow);overflow:hidden}
+.fb{position:absolute;border:2px solid #ffd54a;border-radius:8px}.fb.a{left:26%;top:26%;width:14%;height:24%}.fb.b{left:52%;top:28%;width:13%;height:23%}
+.pillg{position:absolute;left:16px;bottom:16px;background:var(--glass);border:1px solid var(--glass-line);backdrop-filter:blur(10px);border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;color:#1b1b1d}
+.side{display:flex;flex-direction:column;gap:12px}
+.panel{background:var(--glass);border:1px solid var(--glass-line);border-radius:18px;padding:14px 16px;backdrop-filter:blur(10px);box-shadow:0 10px 24px rgba(30,30,60,.08)}
+.panel h4{margin:0 0 8px;font-size:12px;color:var(--mut);font-weight:600;letter-spacing:.04em}
+.warn{display:inline-block;background:#fff1d6;color:#7a4a00;border-radius:999px;padding:4px 11px;font-size:13px;font-weight:600}
+.eyes{display:flex;gap:8px;margin-top:10px}.eyes i{flex:1;height:44px;border-radius:10px;background:linear-gradient(160deg,#cdbfae,#9a8a78)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.b{flex:1;min-width:76px;border-radius:999px;padding:11px 8px;text-align:center;font-weight:700;font-size:14px;border:1px solid transparent}
+.b.s{background:#d9f5e1;color:#14532d}.b.m{background:#ffeccb;color:#7a4a00}.b.x{background:#ffdfe6;color:#7f1d3a}
+.b kbd{font:700 12px ui-monospace,monospace;opacity:.7;margin-right:5px}
+.strip{display:flex;gap:10px;margin-top:18px;align-items:flex-end;height:96px;overflow:hidden}
+.t{flex:0 0 96px;height:76px;border-radius:14px;border:1px solid var(--glass-line);background:linear-gradient(150deg,var(--a),var(--b));position:relative;opacity:.75;transform:rotate(var(--r,0deg))}
+.t.on{height:92px;opacity:1;outline:2px solid var(--tx);outline-offset:2px}
+.t em{position:absolute;right:6px;top:6px;font-style:normal;font-size:11px;font-weight:700;background:var(--glass);border:1px solid var(--glass-line);border-radius:999px;padding:1px 7px;color:#1b1b1d}
+@media(max-width:760px){.stage{grid-template-columns:1fr}.g{width:110px;height:150px}.hero{height:520px}.fan{top:190px}.cta{top:390px}}
+</style></head><body>
+<div class="top"><h1>bcut 시안 ① 다운로드 페이지 ② 앱 훑기 화면 — 유리 카드 스타일</h1><button id="t" type="button">어두운 화면으로 보기</button></div>
+
+<div class="label">① 다운로드 페이지 (첫 화면)</div>
+<div class="win">
+  <nav><div class="l"><span class="dot"></span>bcut</div><div class="r"><span>기능</span><span>사용법</span><span>질문</span><span>다운로드</span></div></nav>
+  <div class="hero">
+    <h2>좋은 컷만,<br>우아하게 고르세요</h2>
+    <div class="fan">
+      <div class="g" style="left:-1%;top:70px;transform:rotate(-12deg);--a:#ffc2dc;--b:#ff7eb3"><div class="ph"></div><div class="ch"><span>보류</span><span>●</span></div></div>
+      <div class="g" style="left:15%;top:40px;transform:rotate(-7deg);--a:#c9c6ff;--b:#8f8bff"><div class="ph"></div><div class="ch"><span>눈 감김 의심</span><span>⚠</span></div></div>
+      <div class="g" style="left:32%;top:8px;transform:rotate(-3deg);--a:#c6f7a8;--b:#4ad66d;width:170px;height:226px"><div class="ph"></div><div class="ch"><span>셀렉</span><span>★ 4</span></div></div>
+      <div class="g" style="left:51%;top:0;transform:rotate(3deg);--a:#b7f3ee;--b:#58c6e8"><div class="ph"></div><div class="ch"><span>셀렉</span><span>✓</span></div></div>
+      <div class="g" style="left:67%;top:38px;transform:rotate(8deg);--a:#e4e4e8;--b:#9a9aa6"><div class="ph"></div><div class="ch"><span>버릴 컷</span><span>✕</span></div></div>
+      <div class="g" style="left:83%;top:72px;transform:rotate(13deg);--a:#f4ffb0;--b:#d5f23c"><div class="ph"></div><div class="ch"><span>보류</span><span>●</span></div></div>
+    </div>
+    <a class="cta" href="#">맥용 다운로드</a>
+    <div class="foot"><div>v0.3.4 · Apple 칩(M1 이후) 맥 · 무료</div><div class="keys"><span>S 셀렉</span><span>M 보류</span><span>X 버릴 컷</span></div><div>사진은 내 맥 밖으로 나가지 않아요</div></div>
+  </div>
+</div>
+
+<div class="label">② 앱 훑기 화면</div>
+<div class="win"><div class="app">
+  <div class="abar"><span><b>260223_EVENT_A_SJ</b> · 훑기</span><span>42 / 300 · 셀렉 12 · 보류 5</span></div>
+  <div class="stage">
+    <div class="big"><div class="fb a"></div><div class="fb b"></div><div class="pillg">눈 감김 의심 · 왼쪽 사람</div></div>
+    <div class="side">
+      <div class="panel"><h4>도구의 의견</h4><span class="warn">⚠ 눈을 감은 것 같아요</span><div class="eyes"><i></i><i></i></div></div>
+      <div class="panel"><h4>내 표시</h4><div class="btns"><div class="b s"><kbd>S</kbd>✓ 셀렉</div><div class="b m"><kbd>M</kbd>● 보류</div><div class="b x"><kbd>X</kbd>✕ 버릴 컷</div></div></div>
+      <div class="panel"><h4>Capture One</h4><div style="font-size:13px;color:var(--mut)">마무리할 때 한꺼번에 표시해요</div></div>
+    </div>
+  </div>
+  <div class="strip">
+    <div class="t" style="--a:#ffc2dc;--b:#ff7eb3;--r:-4deg"></div><div class="t" style="--a:#c9c6ff;--b:#8f8bff;--r:-2deg"><em>보류</em></div>
+    <div class="t" style="--a:#c6f7a8;--b:#4ad66d"><em>셀렉</em></div><div class="t" style="--a:#b7f3ee;--b:#58c6e8;--r:2deg"></div>
+    <div class="t on" style="--a:#8fb7ff;--b:#c9a6ff"></div><div class="t" style="--a:#e4e4e8;--b:#9a9aa6;--r:2deg"><em>버릴</em></div>
+    <div class="t" style="--a:#f4ffb0;--b:#d5f23c;--r:4deg"></div><div class="t" style="--a:#ffd9a8;--b:#ff9f5a;--r:6deg"></div>
+  </div>
+</div></div>
+<script>document.getElementById('t').onclick=function(){var d=document.documentElement,x=d.dataset.theme==='dark';d.dataset.theme=x?'light':'dark';this.textContent=x?'어두운 화면으로 보기':'밝은 화면으로 보기'}</script>
+</body></html>
