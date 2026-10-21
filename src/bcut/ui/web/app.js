@@ -260,13 +260,13 @@
     other.addEventListener('click', function () { S.view = 'start'; S.rows = []; S.listOpen = false; render(); });
     var sortBtn = el('button', null, '마무리하기…');
     sortBtn.addEventListener('click', function () { Finish.open(); });
-    var reviewBtn = el('button', 'primary', S.markCount ? '이어서 훑기' : '훑기 시작');
+    var reviewBtn = el('button', 'lime', S.markCount ? '이어서 훑기' : '훑기 시작');
     reviewBtn.addEventListener('click', startReview);
     act.appendChild(Home.moreMenu([Cloud.chip(), Records.button(), other], render));
     act.appendChild(sortBtn); act.appendChild(reviewBtn); bar.appendChild(act);
     w.appendChild(bar);
     if (S.notice) w.appendChild(el('div', 'notice', S.notice));
-    w.appendChild(Home.hero(c, S.markKinds, startReview));
+    w.appendChild(Home.hero(c, S.markKinds));
     w.appendChild(Home.compact(c));
     var det = el('details', 'res-details'); det.open = S.listOpen;
     det.addEventListener('toggle', function () { S.listOpen = det.open; });

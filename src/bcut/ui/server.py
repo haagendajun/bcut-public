@@ -175,6 +175,7 @@ STATIC = {"/app.js": ("app.js", "text/javascript"), "/logic.js": ("logic.js", "t
           "/finish_view.js": ("finish_view.js", "text/javascript"),
           "/home_view.js": ("home_view.js", "text/javascript"),
           "/filter_view.js": ("filter_view.js", "text/javascript"),
+          "/PretendardVariable.woff2": ("PretendardVariable.woff2", "font/woff2"),
           "/style.css": ("style.css", "text/css")}
 
 
@@ -280,7 +281,7 @@ class _Handler(BaseHTTPRequestHandler):
         data = body if isinstance(body, bytes) else json.dumps(
             body, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
-        charset = "" if ctype == "image/jpeg" else "; charset=utf-8"
+        charset = "" if ctype in ("image/jpeg", "font/woff2") else "; charset=utf-8"
         self.send_header("Content-Type", ctype + charset)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
@@ -337,7 +338,10 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(HTTPStatus.OK, index_html(self.state.cfg.token), "text/html")
         if method == "GET" and path in STATIC:
             name, ctype = STATIC[path]
-            return self._send(HTTPStatus.OK, (WEB_DIR / name).read_bytes(), ctype)
+            body = (WEB_DIR / name).read_bytes()
+            if name == "style.css":   # 글꼴 주소에도 토큰이 필요해서 CSS 안의 자리표시자를 채운다
+                body = body.replace(b"__TOKEN__", self.state.cfg.token.encode())
+            return self._send(HTTPStatus.OK, body, ctype)
         if method == "POST" and path == "/api/choose-folder":
             return self._choose_folder()
         if method == "POST" and path == "/api/reveal":

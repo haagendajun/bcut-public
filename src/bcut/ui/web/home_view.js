@@ -5,10 +5,7 @@
   var ctx = null;          // {el}
   var H = {menu: false};   // 더보기 메뉴가 열려 있는가
 
-  var PARTS = [['candidate', 'var(--p1)', '버릴 것 같은 컷'], ['review', 'var(--p2)', '직접 확인'],
-               ['normal', 'var(--ok)', '이상 없음'], ['other', 'var(--faint)', '얼굴 없음·판단 못 함']];
-
-  function init(c, rerender) {
+    function init(c, rerender) {
     ctx = c;
     document.addEventListener('click', function (e) {   // 메뉴 밖을 누르면 닫는다
       if (H.menu && !e.target.closest('.more-wrap')) { H.menu = false; rerender(); }
@@ -35,7 +32,7 @@
   }
 
   /* 훑기가 주인공인 카드 */
-  function hero(c, marks, onStart) {
+  function hero(c, marks) {
     var box = ctx.el('div', 'hero-card'), left = c.candidate + c.review;
     var text = ctx.el('div', 'hero-text');
     var done = marks.pick + marks.maybe + marks.discard;
@@ -45,28 +42,27 @@
       : '큰 화면에서 한 장씩 보며 셀렉(S)·보류(M)·버릴 컷(X)을 표시해요.'));
     if (left) text.appendChild(ctx.el('p', 'muted', '도구가 먼저 보라고 한 컷이 ' + left + '장 있어요. 훑을 때 이유와 함께 흐리게 보여 줘요.'));
     box.appendChild(text);
-    var go = ctx.el('button', 'primary hero-go', done ? '이어서 훑기' : '훑기 시작');
-    go.addEventListener('click', onStart);
-    box.appendChild(go);
     return box;
   }
 
-  /* 검사 요약 한 줄: 막대 + 범례 */
+  /* 검사 요약: 색이 다른 유리 카드 세 장 (버릴 것 같은 컷 · 직접 확인 · 이상 없음) */
+  var CARDS = [['candidate', 'pink', '버릴 것 같은 컷', '먼저 보세요 · 이유와 함께 표시해 뒀어요'],
+               ['review', 'lavender', '직접 확인', '앱이 판단하기 어려운 컷이에요'],
+               ['normal', 'mint', '이상 없음', '눈·흔들림 문제가 안 보여요']];
   function compact(c) {
     var ov = ctx.el('div', 'overview compact');
-    var meter = ctx.el('div', 'meter');
-    PARTS.forEach(function (p) {
-      if (!c[p[0]]) return;
-      var s = ctx.el('span', 'm-' + p[0]); s.style.flex = String(c[p[0]]); s.title = p[2] + ' ' + c[p[0]] + '장'; meter.appendChild(s);
+    var row = ctx.el('div', 'stat3');
+    CARDS.forEach(function (p) {
+      var card = ctx.el('article', 'gcard ' + p[1] + ' stat');
+      card.appendChild(ctx.el('div', 'stat-l', p[2]));
+      var low = ctx.el('div', null);
+      low.appendChild(ctx.el('div', 'stat-n', String(c[p[0]])));
+      low.appendChild(ctx.el('div', 'stat-s', p[3]));
+      card.appendChild(low);
+      row.appendChild(card);
     });
-    ov.appendChild(meter);
-    var lg = ctx.el('div', 'legend');
-    lg.appendChild(ctx.el('span', 'k muted', '도구의 검사 · 사진 ' + c.total + '장'));
-    PARTS.forEach(function (p) {
-      var k = ctx.el('span', 'k'), dot = ctx.el('span', 'dot'); dot.style.background = p[1]; k.appendChild(dot);
-      k.appendChild(document.createTextNode(p[2] + ' ')); k.appendChild(ctx.el('b', null, String(c[p[0]]))); lg.appendChild(k);
-    });
-    ov.appendChild(lg);
+    ov.appendChild(row);
+    if (c.other) ov.appendChild(ctx.el('p', 'muted stat-more', '얼굴이 없거나 판단하지 못한 사진 ' + c.other + '장은 위 숫자에 들어 있지 않아요.'));
     return ov;
   }
 

@@ -491,7 +491,7 @@ def test_index_gets_the_token_and_static_files_need_it(world):
     for path, ctype in (("/app.js", "javascript"), ("/logic.js", "javascript"), ("/review_logic.js", "javascript"),
                         ("/review.js", "javascript"), ("/review_help.js", "javascript"), ("/sort_view.js", "javascript"),
                         ("/migrate.js", "javascript"), ("/cloud_view.js", "javascript"), ("/capture_view.js", "javascript"), ("/records_view.js", "javascript"), ("/snack.js", "javascript"), ("/finish_view.js", "javascript"), ("/home_view.js", "javascript"), ("/filter_view.js", "javascript"),
-                        ("/style.css", "css")):
+                        ("/PretendardVariable.woff2", "font/woff2"), ("/style.css", "css")):
         assert call(server, "GET", path, token=False)[0] == 401  # 화면 파일도 토큰이 필요하다
         status, headers, raw = call(server, "GET", f"{path}?t={TOKEN}", token=False)
         assert status == 200 and ctype in headers["Content-Type"] and len(raw) > 100

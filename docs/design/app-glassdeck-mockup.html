@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bcut 앱 시안 · Glass Deck 스타일</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable.min.css">
+<style>
+:root{--bg-stage:#e3e3e3;--bg-slide:#f2f2f2;--bg-panel:#fff;--ink:#1f1f1f;--ink-muted:#5c5c5c;--ink-subtle:#8a8a8a;--line:#d6d6d6;--lime:#c6f432;--brand-ink:#222;--on-dark:#fff;
+--pink-f:#fbe3ef;--pink-t:#ff8cc6;--pink-b:#d1176b;--lav-f:#f4f3ff;--lav-t:#8e95f7;--lime-f:#f1ffd0;--lime-t:#9be83c;--lime-b:#4fd84a;--mint-f:#e6fbf8;--mint-t:#5fdccb;--mint-b:#3b6fe0;--sil-f:#f5f5f7;--sil-t:#a9abb2;--sil-b:#26272b;
+--shadow-card:0 40px 80px -24px rgba(31,31,31,.22),0 8px 24px rgba(31,31,31,.06);--shadow-soft:0 12px 32px rgba(31,31,31,.08);
+--font:"Pretendard Variable",Pretendard,-apple-system,"Apple SD Gothic Neo",system-ui,sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg-stage);font-family:var(--font);color:var(--ink);padding:40px 24px 80px;word-break:keep-all;-webkit-font-smoothing:antialiased}
+.note{max-width:1440px;margin:0 auto 18px;font-size:15px;color:var(--ink-muted)}
+.note b{color:var(--ink)}
+.board{max-width:1440px;margin:0 auto 56px}
+.board h2{font-size:18px;font-weight:700;margin:0 0 12px;color:var(--ink)}
+.frame{width:1440px;height:900px;background:var(--bg-slide);border-radius:28px;box-shadow:var(--shadow-card);position:relative;overflow:hidden;transform-origin:0 0}
+.wrap{display:none}
+/* 공통 */
+.top{display:flex;align-items:center;justify-content:space-between;padding:28px 48px}
+.logo{display:flex;align-items:center;gap:12px;font-weight:700;font-size:22px}.logo i{width:30px;height:30px;border-radius:10px;background:linear-gradient(135deg,var(--mint-t),var(--lime))}
+.logo small{font-weight:500;color:var(--ink-subtle);font-size:15px;margin-left:6px}
+.btns{display:flex;gap:12px;align-items:center}
+.pill{height:48px;padding:0 24px;border-radius:99px;display:inline-flex;align-items:center;gap:8px;font:600 16px/1 var(--font);background:var(--bg-panel);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.pill.dark{background:var(--brand-ink);color:#fff;box-shadow:var(--shadow-soft)}
+.pill.lime{background:var(--lime);color:var(--ink);box-shadow:var(--shadow-soft)}
+.pill.ghost{background:transparent;box-shadow:none;color:var(--ink-muted)}
+.card{--from:var(--lime-f);--to:var(--lime-t);--band:var(--lime-b);--bi:var(--ink);position:relative;border-radius:28px;overflow:hidden;display:flex;flex-direction:column;
+background:radial-gradient(120% 70% at 15% 0%,var(--from),transparent 70%),radial-gradient(90% 60% at 100% 100%,var(--to),transparent 75%),linear-gradient(160deg,var(--from),var(--to));box-shadow:var(--shadow-card),inset 0 0 0 1.5px rgba(255,255,255,.65)}
+.card::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(125deg,rgba(255,255,255,.55),rgba(255,255,255,0) 38%)}
+.card.pink{--from:var(--pink-f);--to:var(--pink-t);--band:var(--pink-b);--bi:#fff}.card.lav{--from:var(--lav-f);--to:var(--lav-t);--band:#fff;--bi:var(--ink)}
+.card.lime{--from:var(--lime-f);--to:var(--lime-t);--band:var(--lime-b);--bi:var(--ink)}.card.mint{--from:var(--mint-f);--to:var(--mint-t);--band:var(--mint-b);--bi:#fff}.card.sil{--from:var(--sil-f);--to:var(--sil-t);--band:var(--sil-b);--bi:#fff}
+.card>*{position:relative;z-index:1}
+.photo{border-radius:20px;background:radial-gradient(circle at 34% 40%,rgba(255,255,255,.5) 0 7%,transparent 8%),radial-gradient(circle at 62% 42%,rgba(255,255,255,.4) 0 6%,transparent 7%),linear-gradient(160deg,var(--a),var(--b))}
+.chip{display:inline-flex;align-items:center;height:30px;padding:0 12px;border-radius:99px;font:700 13px/1 var(--font);background:rgba(255,255,255,.78);color:var(--ink)}
+/* A 홈 */
+.hero{padding:0 48px}
+.hero h2{font-size:56px;line-height:1.1;font-weight:700;letter-spacing:-.03em}
+.hero p{font-size:20px;color:var(--ink-muted);margin-top:10px}
+.stat3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:28px 48px 0}
+.stat{height:190px;padding:24px 28px;justify-content:space-between}
+.stat .n{font-size:76px;font-weight:700;letter-spacing:-.04em;line-height:1}
+.stat .l{font-size:20px;font-weight:600}
+.stat .s{font-size:15px;opacity:.8;margin-top:4px}
+.sec{padding:30px 48px 0;display:flex;align-items:baseline;gap:14px}.sec h3{font-size:26px;font-weight:700;letter-spacing:-.02em}.sec span{color:var(--ink-muted);font-size:16px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:16px 48px 0}
+.pc{padding:10px;height:230px}.pc .photo{flex:1}.pc .cap{display:flex;justify-content:space-between;align-items:center;padding:10px 6px 2px;font:600 15px var(--font)}
+/* B 훑기 */
+.rv{display:grid;grid-template-columns:1fr 380px;gap:28px;padding:0 48px;height:600px}
+.rv .big{border-radius:32px;box-shadow:var(--shadow-card);position:relative;overflow:hidden}
+.rv .big .tagline{position:absolute;left:24px;bottom:24px;display:flex;gap:10px}
+.rv .big .fb{position:absolute;border:3px solid #ffd54a;border-radius:12px}
+.side{display:flex;flex-direction:column;gap:16px}
+.panel{background:rgba(255,255,255,.72);border:1.5px solid rgba(255,255,255,.9);border-radius:28px;padding:22px 24px;backdrop-filter:blur(24px);box-shadow:var(--shadow-soft)}
+.panel small{font-size:14px;color:var(--ink-subtle);font-weight:600;letter-spacing:.02em}
+.mk{display:flex;align-items:center;justify-content:space-between;height:64px;padding:0 22px;border-radius:99px;font:700 20px var(--font);margin-top:12px}
+.mk kbd{font:700 14px ui-monospace,Menlo,monospace;background:rgba(255,255,255,.7);border-radius:8px;padding:3px 9px}
+.mk.p{background:linear-gradient(135deg,var(--lime-f),var(--lime-t));box-shadow:0 0 0 3px var(--bg-slide),0 0 0 5px var(--lime-b)}
+.mk.m{background:linear-gradient(135deg,var(--lav-f),var(--lav-t))}.mk.x{background:linear-gradient(135deg,var(--pink-f),var(--pink-t))}
+.sug{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-top:8px}.sug+div{font-size:16px;color:var(--ink-muted);margin-top:6px}
+.strip{display:flex;gap:12px;padding:20px 48px 0;overflow:hidden}
+.strip i{flex:none;width:118px;height:82px;border-radius:16px;background:linear-gradient(160deg,var(--a),var(--b));position:relative;box-shadow:var(--shadow-soft);display:block}
+.strip i.cur{box-shadow:0 0 0 3px var(--bg-slide),0 0 0 5px var(--ink)}
+.strip i b{position:absolute;right:6px;bottom:6px;min-width:22px;height:22px;border-radius:99px;font:800 12px/22px var(--font);text-align:center;color:var(--ink)}
+.strip i b.p{background:var(--lime)}.strip i b.m{background:var(--lav-t);color:#fff}.strip i b.x{background:var(--pink-t)}
+.hint{text-align:center;color:var(--ink-subtle);font-size:14px;padding-top:12px}
+.progress{height:6px;border-radius:99px;background:var(--line);margin:0 48px 20px;overflow:hidden}.progress i{display:block;height:100%;width:42%;background:var(--ink);border-radius:99px}
+/* C Capture One */
+.dim{position:absolute;inset:0;background:rgba(31,31,31,.35);backdrop-filter:blur(8px)}
+.modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:760px;background:var(--bg-slide);border-radius:36px;box-shadow:0 60px 120px rgba(0,0,0,.35);padding:30px 34px 24px;border:1.5px solid rgba(255,255,255,.9)}
+.modal h3{font-size:30px;font-weight:700;letter-spacing:-.03em}
+.steps{display:flex;gap:10px;margin:18px 0 20px}.steps span{flex:1;height:46px;border-radius:99px;display:flex;align-items:center;gap:10px;padding:0 16px;font:600 15px var(--font);background:var(--bg-panel);color:var(--ink-muted)}
+.steps span b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:var(--bg-slide)}
+.steps span.now{background:var(--brand-ink);color:#fff}.steps span.now b{background:#fff;color:var(--ink)}.steps span.done{color:var(--ink)}.steps span.done b{background:var(--lime)}
+.doc{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 18px;border-radius:99px;font:700 16px var(--font);background:var(--bg-panel);box-shadow:inset 0 0 0 2px var(--ink)}
+.kc{display:grid;grid-template-columns:150px 1fr auto;align-items:center;gap:6px 18px;margin-top:12px;padding:16px 22px;border-radius:24px;min-height:98px}
+.kc h4{font-size:22px;font-weight:700;letter-spacing:-.02em}.kc small{display:block;font-size:13px;color:var(--ink);opacity:.7;margin-top:2px}
+.rows{display:flex;flex-direction:column;gap:8px}
+.stars{font-size:22px;letter-spacing:3px;color:var(--ink)}.stars em{font-style:normal;opacity:.28}
+.dots{display:flex;gap:8px}.dots u{width:24px;height:24px;border-radius:50%;background:var(--c);display:block;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.7)}.dots u.on{box-shadow:0 0 0 3px #fff,0 0 0 5px var(--ink)}
+.sum{font:700 14px var(--font);background:rgba(255,255,255,.75);border-radius:99px;padding:7px 14px;white-space:nowrap}
+.mfoot{display:flex;align-items:center;justify-content:space-between;margin-top:22px}
+</style></head><body>
+<p class="note"><b>시안</b> · 지금 슬라이드·다운로드 페이지와 같은 Glass Deck 스타일을 앱 화면에 입힌 모습이에요. 실제 앱은 아직 안 바꿨어요. 화면의 사진은 가상 그림이에요.</p>
+
+<div class="board"><h2>① 첫 화면 (검사 결과)</h2><div class="sc" data-h="900">
+<div class="frame">
+  <div class="top"><div class="logo"><i></i>260223_EVENT_A_SJ<small>사진 24장</small></div>
+    <div class="btns"><span class="pill ghost">더보기</span><span class="pill">마무리하기</span><span class="pill lime">훑기 시작</span></div></div>
+  <div class="hero"><h2>훑기부터 시작해요</h2><p>큰 화면에서 한 장씩 보며 셀렉·보류·버릴 컷을 표시해요.</p></div>
+  <div class="stat3">
+    <article class="card pink stat"><div class="l">버릴 것 같은 컷</div><div><div class="n">5</div><div class="s">먼저 보세요 · 이유와 함께 표시해 뒀어요</div></div></article>
+    <article class="card lav stat"><div class="l">직접 확인</div><div><div class="n">5</div><div class="s">도구가 판단하기 어려운 컷</div></div></article>
+    <article class="card mint stat"><div class="l">이상 없음</div><div><div class="n">14</div><div class="s">눈·흔들림 문제가 안 보여요</div></div></article>
+  </div>
+  <div class="sec"><h3>먼저 보세요</h3><span>버릴 것 같은 컷 5장</span></div>
+  <div class="grid4">
+    <article class="card sil pc"><div class="photo" style="--a:#f4d38a;--b:#7aa23c"></div><div class="cap"><span>IMG_0001</span><span class="chip">눈 감김</span></div></article>
+    <article class="card sil pc"><div class="photo" style="--a:#8f8bff;--b:#7b3f99"></div><div class="cap"><span>IMG_0006</span><span class="chip">눈 감김</span></div></article>
+    <article class="card sil pc"><div class="photo" style="--a:#d6f088;--b:#2e8f4a"></div><div class="cap"><span>IMG_0011</span><span class="chip">눈 감김</span></div></article>
+    <article class="card sil pc"><div class="photo" style="--a:#c58be8;--b:#8f3b66"></div><div class="cap"><span>IMG_0016</span><span class="chip">눈 감김</span></div></article>
+  </div>
+</div></div></div>
+
+<div class="board"><h2>② 훑기 화면</h2><div class="sc" data-h="900">
+<div class="frame">
+  <div class="top"><div class="logo"><i></i>IMG_0001<small>셀렉 4장 · 본 사진 10 / 전체 24</small></div>
+    <div class="btns"><span class="pill ghost">의심 컷 건너뛰기 D</span><span class="pill ghost">얼굴 박스 F</span><span class="pill">마치기 Esc</span></div></div>
+  <div class="progress"><i></i></div>
+  <div class="rv">
+    <div class="big photo" style="--a:#f4d38a;--b:#6f9a3a"><div class="fb" style="left:27%;top:24%;width:12%;height:26%"></div><div class="fb" style="left:50%;top:27%;width:11%;height:24%"></div>
+      <div class="tagline"><span class="chip">눈 감김 의심 · 왼쪽 사람</span></div></div>
+    <div class="side">
+      <div class="panel"><small>지금 표시</small>
+        <div class="mk p"><span>셀렉</span><kbd>S</kbd></div>
+        <div class="mk m"><span>보류</span><kbd>M</kbd></div>
+        <div class="mk x"><span>버릴 컷</span><kbd>X</kbd></div></div>
+      <div class="panel"><small>앱이 본 것</small><div class="sug">눈이 거의 감긴 것 같아요</div><div>의심 정도 높음 · 최종 판단은 내가 해요</div></div>
+    </div>
+  </div>
+  <div class="strip">
+    <i class="cur" style="--a:#f4d38a;--b:#6f9a3a"><b class="p">✓</b></i><i style="--a:#d6f088;--b:#2e8f4a"><b class="m">●</b></i><i style="--a:#8f8bff;--b:#7b3f99"><b class="x">✕</b></i><i style="--a:#5fdccb;--b:#2e6f9a"><b class="p">✓</b></i><i style="--a:#8e95f7;--b:#2d2f8f"></i><i style="--a:#f4f3ff;--b:#a89be0"><b class="m">●</b></i><i style="--a:#fbe3ef;--b:#d68ab8"></i><i style="--a:#ff8cc6;--b:#8f2d5e"><b class="x">✕</b></i><i style="--a:#e8a15c;--b:#7a3d2d"><b class="p">✓</b></i><i style="--a:#e6d48a;--b:#7a8a3d"></i>
+  </div>
+  <div class="hint">← → 이동 · S 셀렉 · M 보류 · X 버릴 컷 · ⌘Z 실행 취소 · F 얼굴 박스 · Z 100% 확대</div>
+</div></div></div>
+
+<div class="board"><h2>③ Capture One에도 표시하기</h2><div class="sc" data-h="900">
+<div class="frame">
+  <div class="top"><div class="logo"><i></i>260223_EVENT_A_SJ<small>사진 24장</small></div><div class="btns"><span class="pill">마무리하기</span><span class="pill dark">훑기 시작</span></div></div>
+  <div class="hero"><h2>훑기부터 시작해요</h2></div>
+  <div class="dim"></div>
+  <div class="modal">
+    <h3>Capture One에도 표시하기</h3>
+    <div class="steps"><span class="done"><b>✓</b>어디에</span><span class="now"><b>2</b>무엇을</span><span><b>3</b>결과 확인</span></div>
+    <span class="doc">✓ sejun.cosessiondb · 세션</span>
+    <article class="card lime kc"><div><h4>셀렉</h4><small>이름표 bcut-셀렉</small></div><div class="rows"><div class="stars">★★★★<em>★</em></div><div class="dots"><u style="--c:#e5484d"></u><u style="--c:#f08a24"></u><u style="--c:#f5c518"></u><u class="on" style="--c:#3fae5a"></u><u style="--c:#3b82f6"></u><u style="--c:#ec6aa8"></u><u style="--c:#8b5cf6"></u></div></div><span class="sum">★ 4점 · 색 초록</span></article>
+    <article class="card lav kc"><div><h4>보류</h4><small>이름표 bcut-보류</small></div><div class="rows"><div class="stars"><em>★★★★★</em></div><div class="dots"><u style="--c:#e5484d"></u><u style="--c:#f08a24"></u><u style="--c:#f5c518"></u><u style="--c:#3fae5a"></u><u style="--c:#3b82f6"></u><u style="--c:#ec6aa8"></u><u style="--c:#8b5cf6"></u></div></div><span class="sum">이름표만</span></article>
+    <article class="card pink kc"><div><h4>버릴 컷</h4><small>이름표 bcut-버릴컷</small></div><div class="rows"><div class="stars"><em>★★★★★</em></div><div class="dots"><u class="on" style="--c:#e5484d"></u><u style="--c:#f08a24"></u><u style="--c:#f5c518"></u><u style="--c:#3fae5a"></u><u style="--c:#3b82f6"></u><u style="--c:#ec6aa8"></u><u style="--c:#8b5cf6"></u></div></div><span class="sum">색 빨강</span></article>
+    <div class="mfoot"><span class="pill ghost" style="padding:0">붙인 것 되돌리기…</span><div class="btns"><span class="pill ghost">닫기</span><span class="pill dark">미리보기</span></div></div>
+  </div>
+</div></div></div>
+
+<script>
+function fit(){document.querySelectorAll('.sc').forEach(function(sc){var f=sc.querySelector('.frame'),w=Math.min(sc.parentElement.clientWidth,1440),s=w/1440;f.style.transform='scale('+s+')';sc.style.height=(900*s)+'px';sc.style.width=(1440*s)+'px'})}
+addEventListener('resize',fit);fit();
+</script>
+</body></html>

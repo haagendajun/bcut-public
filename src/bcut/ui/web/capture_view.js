@@ -124,7 +124,7 @@
     section(p, '2', '무엇을 붙일까요?');
     note(p, '이름표는 항상 붙어요. 별점과 색은 주고 싶은 것만 골라요. 안 고르면 그대로 둬요.', 'muted cap-sub');
     KINDS.forEach(function (k) {
-      var card = ctx.el('div', 'cap-kcard');
+      var card = ctx.el('div', 'cap-kcard gcard ' + (k[0] === 'pick' ? 'lime' : k[0] === 'maybe' ? 'lavender' : 'pink'));
       var head = ctx.el('div', 'cap-khead');
       var left = ctx.el('div', 'cap-kleft');
       left.appendChild(ctx.el('b', null, k[1]));
