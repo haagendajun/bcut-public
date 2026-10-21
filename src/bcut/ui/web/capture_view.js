@@ -22,8 +22,21 @@
   function open() {
     var st = loadStyle();
     C = {catalog: get(KEY), res: null, busy: false, error: null, partial: false, style: st.style,
-         overwrite: !!st.overwrite, more: false};
+         overwrite: !!st.overwrite, more: false, docs: null, docsError: null};
     ctx.rerender();
+    loadDocs();
+  }
+  /* Capture One에 지금 열려 있는 카탈로그·세션을 가져와 고르게 한다 (이름을 직접 안 써도 되게) */
+  function loadDocs() {
+    var mine = C;
+    ctx.api('POST', '/api/jobs/' + ctx.job() + '/capture-one', {action: 'documents'})
+      .then(function (j) {
+        if (C !== mine) return;
+        C.docs = j.documents || [];
+        if (C.docs.length === 1) C.catalog = C.docs[0].name;   // 하나뿐이면 그게 지금 쓸 수 있는 문서다
+        ctx.rerender();
+      })
+      .catch(function (e) { if (C !== mine) return; C.docs = []; C.docsError = e.message; ctx.rerender(); });
   }
   function close() { if (C && C.busy) return; C = null; ctx.rerender(); }
   function stale() { C.res = null; C.error = null; ctx.rerender(); }   // 값을 바꾸면 미리보기를 다시 한다
@@ -189,6 +202,29 @@
     return f;
   }
 
+  function renderDocs(body) {
+    if (C.docs === null) { note(body, 'Capture One에 열려 있는 것을 찾는 중이에요…'); }
+    else if (C.docs.length) {
+      var row = ctx.el('div', 'cap-docs');
+      C.docs.forEach(function (d) {
+        var on = d.name === C.catalog;
+        var b = ctx.el('button', 'cap-doc' + (on ? ' on' : ''), (on ? '✓ ' : '') + d.name + ' · ' + (d.kind === 'session' ? '세션' : '카탈로그'));
+        b.type = 'button'; b.setAttribute('aria-pressed', String(on));
+        b.addEventListener('click', function () { C.catalog = d.name; stale(); });
+        row.appendChild(b);
+      });
+      body.appendChild(row);
+      note(body, 'Capture One에서 지금 열려 있는 것이에요. 눌러서 고르세요.');
+    } else {
+      note(body, C.docsError || 'Capture One에 열린 카탈로그나 세션이 없어요. Capture One에서 먼저 열어 주세요.', 'err');
+    }
+    var more = ctx.el('details', 'cap-manual'); more.open = !!(C.docs && !C.docs.length);
+    more.appendChild(ctx.el('summary', null, '목록에 없으면 이름을 직접 쓰기'));
+    var inp = ctx.el('input'); inp.type = 'text'; inp.value = C.catalog; inp.placeholder = '예: sejun.cosessiondb (확장자까지)';
+    inp.addEventListener('input', function () { C.catalog = inp.value; });
+    more.appendChild(inp); body.appendChild(more);
+  }
+
   function render() {
     if (!C) return null;
     var modal = ctx.el('div', 'modal'), p = ctx.el('div', 'panel cap-panel');
@@ -197,10 +233,7 @@
     head.appendChild(x); p.appendChild(head);
     var body = ctx.el('div', 'cap-body');
     section(body, '1', '어디에 붙일까요?');
-    var inp = ctx.el('input'); inp.type = 'text'; inp.value = C.catalog; inp.placeholder = '예: sejun.cosessiondb';
-    inp.addEventListener('input', function () { C.catalog = inp.value; });
-    body.appendChild(inp);
-    note(body, 'Capture One에서 지금 열려 있는 카탈로그나 세션 이름이에요. 이름이 다르면 아무것도 바뀌지 않아요.');
+    renderDocs(body);
     renderChoices(body);
     if (C.busy) note(body, '잠시만요… Capture One과 이야기하는 중이에요.');
     if (C.error) body.appendChild(box('bad', C.error));

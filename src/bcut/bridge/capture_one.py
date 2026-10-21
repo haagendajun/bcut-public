@@ -138,6 +138,18 @@ KIND_SCRIPT = f"""on run argv
 end run
 """
 
+# 지금 열려 있는 문서(카탈로그·세션)의 이름과 종류. 읽기만 한다. 한 줄에 하나: 이름, 종류.
+DOCUMENTS_SCRIPT = f"""on run argv
+  set out to ""
+  tell application "Capture One"
+    repeat with d in (every document)
+      set out to out & (name of d) & "{FIELD_SEP}" & ((kind of d) as text) & linefeed
+    end repeat
+  end tell
+  return out
+end run
+"""
+
 # 세션의 사진 모으기 (읽기). 세션은 컬렉션 종류가 카탈로그와 달라서(폴더가 Capture·Selects 등),
 # 폴더 컬렉션을 먼저, 나머지를 그다음에 읽고 하위 컬렉션까지 내려간다. 같은 경로는 파이썬에서
 # 한 번만 센다. 한 줄의 모양과 빠른 길은 LIST_SCRIPT와 같다(`_READ_ROWS`).
@@ -345,6 +357,16 @@ class CaptureOneBridge:
     def ping(self) -> str:
         """열려 있는 카탈로그 이름을 돌려준다. 지정한 카탈로그가 아니면 AppleScriptError."""
         return self._call(PING_SCRIPT)
+
+    def list_documents(self) -> list[tuple[str, str]]:
+        """Capture One에 열려 있는 문서의 (이름, 종류). 이름은 확장자를 포함해 그대로다."""
+        out = self._run(DOCUMENTS_SCRIPT, [], **self._kwargs())
+        docs = []
+        for line in out.splitlines():
+            name, _, kind = line.partition(FIELD_SEP)
+            if name.strip():
+                docs.append((name, kind.strip().lower()))
+        return docs
 
     def document_kind(self) -> str:
         """열려 있는 문서가 "catalog"인지 "session"인지. 지정한 문서가 아니면 AppleScriptError."""

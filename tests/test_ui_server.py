@@ -669,6 +669,9 @@ class FakeCaptureBridge:
     def list_variants(self):
         return list(self.items)
 
+    def list_documents(self):
+        return [("bcut-test.cosessiondb", "session")]
+
     def keywords(self):
         return ["bcut-셀렉", "bcut-보류", "bcut-버릴컷"]
 
@@ -692,6 +695,15 @@ def test_capture_one_route_previews_marks_without_writing(world):
     out = jbody(raw)
     assert st == 200 and out["aborted"] is None and out["mode"] == "dry-run"
     assert out["keyword_counts"] == {"bcut-버릴컷": 1, "bcut-셀렉": 1}
+
+
+def test_capture_one_route_lists_open_documents(world):
+    server, ev, *_ = world
+    server.app_state.cfg.capture_bridge = lambda catalog: FakeCaptureBridge(ev)
+    job = start_job(server, ev)
+    st, _, raw = call(server, "POST", f"/api/jobs/{job}/capture-one", {"action": "documents"})
+    assert st == 200
+    assert jbody(raw)["documents"] == [{"name": "bcut-test.cosessiondb", "kind": "session"}]
 
 
 def test_capture_one_route_guards(world):

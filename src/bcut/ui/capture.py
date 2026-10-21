@@ -97,13 +97,24 @@ def _is_session(bridge) -> bool:
     return session
 
 
+def _documents(make_bridge: Callable[[str], CaptureOneBridge]) -> tuple[int, dict]:
+    """Capture One에 열려 있는 카탈로그·세션 이름을 알려 준다 (사용자가 이름을 직접 안 쓰게)."""
+    try:
+        docs = make_bridge("(목록)").list_documents()
+    except AppleScriptError as exc:
+        return 502, {"error": explain_error(exc)}
+    return 200, {"documents": [{"name": n, "kind": k} for n, k in docs]}
+
+
 def handle(store: MarkStore, folder: Path, names: set[str], data_dir: Path, body: dict,
            make_bridge: Callable[[str], CaptureOneBridge] = CaptureOneBridge,
            now: Callable[[], str] | None = None) -> tuple[int, dict]:
     """(HTTP 상태 번호, 응답). 이 파일은 http를 쓰지 않아서(안전 규칙) 상태를 숫자로 준다."""
     action, catalog = body.get("action"), body.get("catalog")
+    if action == "documents":
+        return _documents(make_bridge)
     if action not in ACTIONS:
-        return 400, {"error": "action은 preview, apply, rollback 중 하나여야 한다"}
+        return 400, {"error": "action은 preview, apply, rollback, documents 중 하나여야 한다"}
     if not isinstance(catalog, str) or not catalog.strip():
         return 400, {"error": "카탈로그 또는 세션 이름을 입력해야 한다"}
     try:

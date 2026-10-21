@@ -187,3 +187,16 @@ def test_live_read_only_against_test_catalog():
     assert variants and all(v.path.endswith(".CR3") for v in variants)
     with pytest.raises(AppleScriptError, match="wrong catalog"):
         CaptureOneBridge(name + "-x").ping()
+
+
+def test_list_documents_parses_name_and_kind() -> None:
+    from bcut.bridge.capture_one import DOCUMENTS_SCRIPT, CaptureOneBridge
+    seen = []
+
+    def run(script, args, **kw):
+        seen.append((script, list(args)))
+        return "sejun.cosessiondb\tsession\nmy.cocatalog\tCatalog\n"
+
+    docs = CaptureOneBridge("x", run=run).list_documents()
+    assert docs == [("sejun.cosessiondb", "session"), ("my.cocatalog", "catalog")]
+    assert seen[0][0] == DOCUMENTS_SCRIPT
