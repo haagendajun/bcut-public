@@ -1,7 +1,7 @@
 {
   "name": "bcut",
   "productName": "bcut",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "행사 사진의 B컷 후보를 폴더별로 정리하는 앱 (본인 Mac 전용)",
   "main": "main.js",
   "private": true
