@@ -8,7 +8,7 @@
 - **out_of_focus (초점 실패):** 얼굴 안쪽을 **풀 해상도**로 재서 흐림이 face_blur_min 이상인데
   사진 어딘가는 선명하다 (best < best_blur_min). 초점이 배경에 맞은 경우다.
   얼굴 폭이 min_face_px(풀 해상도 기준) 미만이면 이 규칙은 쓰지 않는다. 얼굴이 작을수록 정상
-  사진에서도 값이 높게 나와 (EVENT_A 끝 구간 얼굴 355~380px에서 최대 0.74) 구분할 수 없었다.
+  사진에서도 값이 높게 나와 (행사 A 끝 구간 얼굴 355~380px에서 최대 0.74) 구분할 수 없었다.
   face 규칙에서 blur로 걸린 경우(best도 높음)는 blur로 센다.
 - 얼굴은 눈 감김·노출과 같은 기준으로 고른다: 가장 큰 얼굴 면적의 group_face_ratio 배 이상.
 
@@ -26,7 +26,7 @@ from bcut.score.exposure import status_for_flag  # noqa: F401  (등급 규칙은
 
 Kind = Literal["blur", "out_of_focus"]
 
-# 실제 사진(EVENT_A·EVENT_B 535장, 100% 확대로 결함 없음 확인)에서 한 장도 안 걸리는 값
+# 실제 사진(행사 A·행사 B 535장, 100% 확대로 결함 없음 확인)에서 한 장도 안 걸리는 값
 DEFAULT_BEST_BLUR_MIN = 0.55
 DEFAULT_FACE_BLUR_MIN = 0.62  # 얼굴 폭 420px 이상에서 실제 사진 최대 0.569, 여유 0.05
 DEFAULT_MIN_FACE_PX = 420

@@ -28,7 +28,7 @@ from bcut.detect.types import Face
 
 Status = Literal["candidate", "review", "normal", "no_face", "unscorable"]
 
-# EVENT_A 구간(397장) 전체로 정한 기본값 (T1.5 이후 재산정, G1a 평가).
+# 행사 A 구간(397장) 전체로 정한 기본값 (T1.5 이후 재산정, G1a 평가).
 # candidate 경계는 오탐 0 기준(학습 음성보다 낮은 값), review 경계는 학습 B의 95%가 들어가는 값.
 # 눈이 좁은 컷은 아래 별도 규칙이 처리하므로 경계를 정할 때 뺐다. (T1.4에서 눈이 좁은 컷까지
 # 넣고 정했던 0.187은 필요 이상으로 넓었다. 교차 검증에서 95%는 확인 부담이 90%와 같으면서

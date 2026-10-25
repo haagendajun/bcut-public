@@ -72,7 +72,7 @@ class ReportStats:
 class RatioLimits:
     """이 비율을 넘으면 임계값·입력이 이상하다고 보고 반영을 멈춘다 (CUJ-01 E2).
 
-    기본값은 실제 두 행사(EVENT_A 후보 8%·후보+확인 15%, EVENT_B 0%·8%)보다 한참 위다.
+    기본값은 실제 두 행사(행사 A 후보 8%·후보+확인 15%, 행사 B 0%·8%)보다 한참 위다.
     """
 
     max_candidate_ratio: float = 0.20

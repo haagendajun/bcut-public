@@ -30,7 +30,7 @@ from bcut.detect.types import Face
 Kind = Literal["over_face", "over_global", "under"]
 Status = Literal["candidate", "review", "normal"]
 
-# 두 행사(EVENT_A 구간 397장, EVENT_B 138장)의 실제 사진에서 한 장도 안 걸리고,
+# 두 행사(행사 A 구간 397장, 행사 B 138장)의 실제 사진에서 한 장도 안 걸리고,
 # 노출을 인위적으로 바꾼 합성에서 어느 정도 잡히는 값 (docs/exposure-experiment.md)
 DEFAULT_FACE_HI_FRAC = 0.20  # 실제 사진 최대 11.3%, 노출 +2단계 합성의 83%를 잡는다
 DEFAULT_GLOBAL_HI_FRAC = 0.30  # 얼굴 없는 사진. 근거 약함
