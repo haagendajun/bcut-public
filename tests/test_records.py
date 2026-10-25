@@ -20,7 +20,7 @@ def data(tmp_path):
     store = MarkStore(events)
     for n, kind in (("A.CR3", "pick"), ("B.CR3", "pick"), ("C.CR3", "maybe"), ("D.CR3", "discard")):
         store.set(KEY, n, 100, kind)
-    (events / KEY / "event.json").write_text(json.dumps({"name": "260223 EVENT_A SJ"}),
+    (events / KEY / "event.json").write_text(json.dumps({"name": "260223 EVENT A SJ"}),
                                              encoding="utf-8")
     ReviewStore(events).add(KEY, {
         "id": "review-0001", "scan_ref": "j", "started_at": "2026-10-20T10:00:00+09:00",
@@ -43,7 +43,7 @@ def lines(d):
 def test_list_shows_marks_reviews_cloud_and_capture_records(data):
     out = list_records(data)
     card = out["events"][0]
-    assert card["name"] == "260223 EVENT_A SJ"
+    assert card["name"] == "260223 EVENT A SJ"
     assert card["marks"] == {"pick": 2, "maybe": 1, "discard": 1}
     assert card["reviews"]["count"] == 1 and card["reviews"]["seen"] == 40
     assert card["reviews"]["seconds"] == 600
@@ -124,7 +124,7 @@ def test_trash_list_has_readable_titles_and_groups(data):
     items = {t["kind"]: t for t in list_records(data)["trash"]}
     assert items["event"]["title"] == "행사 기록 (표시·훑기)"
     assert items["capture"]["title"] == "Capture One 반영 기록 · sejun.cosessiondb"
-    assert items["event"]["group"] == items["capture"]["group"] == "260223 EVENT_A SJ"
+    assert items["event"]["group"] == items["capture"]["group"] == "260223 EVENT A SJ"
 
 
 def test_old_trash_items_without_new_fields_still_get_titles(data):

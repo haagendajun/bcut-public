@@ -1,6 +1,6 @@
 # 정답 B컷 표시 방법 (라벨링 가이드)
 
-> 작성일: 2026-10-19 · 대상: `~/Desktop/260212 EVENT_B STRX SJ 복사본` (CR3 145장)
+> 작성일: 2026-10-19 · 대상: `~/Desktop/260212 행사 B STRX SJ 복사본` (CR3 145장)
 > 목적: devplan T0.6(정확도 측정)과 T1.11~1.13(보정·평가)에 쓸 **정답 데이터**를 만든다.
 > 근거: 탈락 사유가 어디에도 남아 있지 않다 ([env.md](env.md) 4장). 별점 5점 16장만 있고 나머지 129장은 사유를 알 수 없다.
 
@@ -98,8 +98,8 @@ python3 tools/export_labels.py "<행사 폴더>" --catalog <카탈로그.cocatal
 ```
 
 실제로 쓴 값 (2026-10-19, 위치는 이후 옮겼다):
-- EVENT_B: 행사 폴더 `~/photo-select-data/events/260212_EVENT_B_STRX_SJ` (처음에는 바탕화면, 중간에 iCloud `스튜디오박스/행사사진/260212 EVENT_B STRX SJ 복사본`에도 같은 사진이 있었다), 카탈로그 `~/photo-select-data/catalogs/PILOT.cocatalog`
-- EVENT_A: 행사 폴더 `~/photo-select-data/events/260223_EVENT_A_seg400`, 카탈로그 `~/photo-select-data/catalogs/PILOT2.cocatalog`
+- 행사 B: 행사 폴더 `~/photo-select-data/events/260212_행사 B_STRX_SJ` (처음에는 바탕화면, 중간에 iCloud `스튜디오박스/행사사진/260212 행사 B STRX SJ 복사본`에도 같은 사진이 있었다), 카탈로그 `~/photo-select-data/catalogs/PILOT.cocatalog`
+- 행사 A: 행사 폴더 `~/photo-select-data/events/260223_행사 A_seg400`, 카탈로그 `~/photo-select-data/catalogs/PILOT2.cocatalog`
 
 **단, 카탈로그는 사진 경로를 기억하고 있어서 폴더를 옮기면 Capture One에서 오프라인으로 보인다.** 내보내기(`export_labels.py`)는 카탈로그 DB만 읽으므로 사진이 오프라인이어도 라벨은 읽힌다.
 
@@ -122,7 +122,7 @@ python3 tools/export_labels.py "<행사 폴더>" --catalog <카탈로그.cocatal
 | **할 수 있는 것** | 145장 중 B 건수와 사유 분포 파악, 오탐률(최종 A컷 16장이 걸리는지, 표정 주의 컷이 걸리는지), 정탐률 대략치 |
 | **한계 1: 양** | 145장이고 B가 몇 장 나올지 모른다. B가 10~20장 이하이면 정탐률은 **참고치**일 뿐이다 |
 | **한계 2: 보정과 평가를 분리하기 어렵다** | 같은 145장으로 임계값을 정하고 평가하면 성능이 부풀려진다. 임시로 **교차 검증**(반씩 나눠 번갈아)을 쓰되, **최종 판정은 다른 행사로 한다** |
-| **한계 3: 행사 1건의 성격** | 한 행사(EVENT_B STRX, 제품·인물 혼합 **[가정, 사진 미확인]**, 약 30분 촬영)의 결과가 다른 행사에 맞는다는 보장이 없다 |
+| **한계 3: 행사 1건의 성격** | 한 행사(행사 B STRX, 제품·인물 혼합 **[가정, 사진 미확인]**, 약 30분 촬영)의 결과가 다른 행사에 맞는다는 보장이 없다 |
 | **한계 4: 규모** | 300장 미만이라 PRD의 "소" 구간보다 작다. 시간 측정(T0.3, T0.7)은 이 행사만으로 대표성이 낮다 |
 
 **권장:** 이 행사로 방식과 도구를 먼저 만들어 보고, **중·대 규모 행사 2건을 추가로** 같은 방법으로 표시해 최종 평가에 쓴다 (devplan Phase 4 TC-02).

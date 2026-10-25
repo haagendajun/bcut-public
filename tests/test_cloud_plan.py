@@ -23,9 +23,9 @@ M2 = {"id": "b" * 32, "file": "A.CR3", "size": 10, "kind": "maybe", "at": T1}
 
 
 def test_event_name_from_event_json_else_folder_key(tmp_path):
-    _write(tmp_path / "k1", name="EVENT_B 145")
+    _write(tmp_path / "k1", name="EVENT B 145")
     _write(tmp_path / "k2")
-    assert read_event(tmp_path / "k1").name == "EVENT_B 145"
+    assert read_event(tmp_path / "k1").name == "EVENT B 145"
     assert read_event(tmp_path / "k2").name == "k2"
 
 

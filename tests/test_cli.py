@@ -68,11 +68,11 @@ def test_scan_without_photos_fails_and_writes_nothing(tmp_path, monkeypatch, cap
 
 
 def test_default_out_dir_is_outside_the_event_folder(tmp_path, monkeypatch):
-    event = tmp_path / "260223 EVENT_A"
+    event = tmp_path / "260223 EVENT A"
     event.mkdir()
     monkeypatch.chdir(tmp_path / ".." / tmp_path.name)
     out = resolve_out_dir(event, None)
-    assert out.parts[-2:] == ("bcut-out", "260223 EVENT_A")
+    assert out.parts[-2:] == ("bcut-out", "260223 EVENT A")
     assert event.resolve() not in out.resolve().parents
 
 

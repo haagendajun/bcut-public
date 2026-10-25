@@ -86,9 +86,9 @@ def test_title_is_escaped():
 
 
 def test_default_title_has_event_name_and_first_cut_wording():
-    text = html(folder_name="260223 EVENT_A SJ 구간")
-    assert "<title>260223 EVENT_A SJ 구간 · 1차 컷 리포트</title>" in text
-    assert payload(text)["title"] == "260223 EVENT_A SJ 구간 · 1차 컷 리포트"
+    text = html(folder_name="260223 EVENT A SJ 구간")
+    assert "<title>260223 EVENT A SJ 구간 · 1차 컷 리포트</title>" in text
+    assert payload(text)["title"] == "260223 EVENT A SJ 구간 · 1차 컷 리포트"
 
 
 def test_reports_of_different_events_have_different_titles():

@@ -316,7 +316,7 @@ def test_read_report_stats(world):
 
 def test_ratio_warnings_thresholds():
     ok = ReportStats(100, {"candidate": 8, "review": 7, "normal": 85}, {})
-    assert ratio_warnings(ok, RatioLimits()) == []  # 실제 EVENT_A 정도의 비율은 경고 없음
+    assert ratio_warnings(ok, RatioLimits()) == []  # 실제 행사 A 정도의 비율은 경고 없음
     high_c = ReportStats(100, {"candidate": 21, "review": 0, "normal": 79}, {})
     assert len(ratio_warnings(high_c, RatioLimits())) == 1
     high_both = ReportStats(100, {"candidate": 30, "review": 20, "normal": 50}, {})
