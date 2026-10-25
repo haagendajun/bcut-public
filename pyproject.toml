@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bcut"
-version = "0.3.6"
+version = "0.3.7"
 description = "포토팀 셀렉용 B컷 후보 사전 필터 (로컬 전용)"
 requires-python = ">=3.13"
 dependencies = [
