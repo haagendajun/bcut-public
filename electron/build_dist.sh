@@ -55,6 +55,18 @@ import sys, ssl, sqlite3, lzma, decimal, numpy, PIL, rawpy, objc, Vision, bcut.u
 assert sys.prefix.startswith('$PY'), sys.prefix
 print('ok', sys.version.split()[0])"
 
+echo "▸ 오픈소스 라이선스 고지 담기 (Contents/Resources/legal)"
+LEGAL="$RES/legal"; mkdir -p "$LEGAL"
+# Electron을 받은 폴더에는 있지만 Electron.app만 복사하므로 따로 담아야 한다
+for f in "$ROOT/THIRD_PARTY_NOTICES.md" "$ROOT/licenses" \
+         "$CACHE/unpacked/LICENSE" "$CACHE/unpacked/LICENSES.chromium.html"; do
+  [ -e "$f" ] || { echo "라이선스 고지 파일이 없습니다: $f" >&2; exit 1; }
+done
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$LEGAL/"
+rsync -a "$ROOT/licenses/" "$LEGAL/licenses/"
+cp "$CACHE/unpacked/LICENSE" "$LEGAL/licenses/Electron-MIT.txt"
+cp "$CACHE/unpacked/LICENSES.chromium.html" "$LEGAL/LICENSES.chromium.html"
+
 echo "▸ 아이콘·정보"
 TMP="$(mktemp -d)"
 "$VENV_SRC/bin/python" "$HERE/make_icon.py" "$TMP/icon.png"; mkdir "$TMP/icon.iconset"
